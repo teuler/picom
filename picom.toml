@@ -1,0 +1,14 @@
+title = "TOML for PicoM"
+
+[serial]
+com_port = "COM5"
+com_baudrate = 921600
+com_timeout_s = 0.2
+
+[xmodem]
+xmodem_retry = 8
+xmodem_wait_s = 1.5
+xmodem_package_size_bytes = 128
+
+[debugging]
+verbose = 1
