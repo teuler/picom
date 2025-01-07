@@ -614,13 +614,25 @@ def _backup(_args :list) -> tuple:
             f"`{path_local_abs}` already exists, cannot overwrite existing backup",
             []
         )
-    # Getting file tree
-    ftree = getFileTree(_args.drive)
+
+    # Get file tree
+    errC, msg, ftree = getFileTree(_args.drive)
+    if errC != ErrCode.OK:
+        return (errC, msg, [])
 
     # Getting ready
     print(f"Create backup of PicoMite @ `{_args.serial}` :")
     print(f"  Backup folder : `{path_local_abs}`")
     path = _args.drive
+
+    # Go through file tree ...
+    for ln in ftree:
+        if ln[1] == ElementType.IS_FOLDER:
+            # Create folder if needed
+            # path_local_abs
+            print("make folder", ln[0])
+        else:
+            print("retrieve file", ln[0])    
               
     return (ErrCode.OK, "", [])
 
