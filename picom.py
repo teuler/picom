@@ -545,6 +545,7 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
     log(f"`{fname}` : Size: {fsize} bytes (= {xmodem_n_pkgs} packages)")
 
     # Extend path, if `path_local` is defined
+    print("path_local", path_local)
     path = getAbsLocalPath(path_local)
 
     # Open local target file and trigger transfer from PicoMite 
