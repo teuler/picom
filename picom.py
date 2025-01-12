@@ -356,6 +356,7 @@ def getAbsLocalPath(path_local :str) -> str:
     #assert platform.system().lower() == "windows"      
     path_local_abs = Path(path_local).resolve().__str__() # +"\\"
     #return path_local_abs.replace("\\", "/") # +"/"
+    return path_local_abs
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 def getFileTree(drive :str, verbose :bool =True) -> list:
