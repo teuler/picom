@@ -9,6 +9,7 @@
 # ---------------------------------------------------------------------------
 import serial
 import io
+import os
 import sys
 import time
 import textwrap
@@ -17,11 +18,17 @@ import tomllib
 import logging
 import datetime
 import platform
+import serial.tools.list_ports as serial_p
 from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
 PROG_VER       = "0.1.2 (beta)"
+
+MASK_OPT_TXT   = "{0}_options.txt"
+MASK_FTREE_TXT = "{0}_filetree.txt"
+FILE_EXT_OPT   = ".opt"
+FILE_EXT_LIB   = ".lib"
 
 # ---------------------------------------------------------------------------
 # Default configuration (replaced by content of `picom.toml`)
@@ -39,11 +46,13 @@ VERBOSE         = True
 # ---------------------------------------------------------------------------
 class ErrCode:
     OK              = 0
+    USER_ABORT      = 1
     INVALID_DRIVE   = 10
     DRIVE_NOT_READY = 11
     B_NOT_ENABLED   = 12
     INVALID_PATH    = 13
     FOLDER_EXISTS   = 14
+    FOLDER_MISSING  = 15
     INVALID_CMD     = 20
     PARAM_MISSING   = 21
     NO_PICO_FOUND   = 30
@@ -89,12 +98,16 @@ def getCmdLineArgs() -> list:
               ol, "option list"  Print options set on PicoMite
               f, "files"         List files on given drive and current folder
                                  (considers options `-d`, `-p`)   
+              ft, "filetree"     List all files                 
+                                 (considers option `-d`)         
               xs, "xmodem s"     Send file(s) to PicoMite
-                                 (requires options `-f`, considers `-d`, `-p`)   
+                                 (requires option `-f`, considers `-d`, `-p`)   
               xr, "xmodem r"     Retrieve file(s) from Picomite
-                                 (requires options `-f`, considers `-d`, `-p`)   
+                                 (requires option `-f`, considers `-d`, `-p`)   
               b, "backup"        Create complete backup of the PicoMite's given drive
-                                 (requires options `-n`, considers `-d`)   
+                                 (requires option `-n`, considers `-d`)   
+              r, "restore"       Restore a backup from a local folder to the PicoMite
+                                 (requires option `-n`, considers `-d`)                          
         '''), 
         epilog=''
     )
@@ -135,26 +148,34 @@ def createSerialIO(_port :str, _baudrate :int) -> tuple:
     """ 
     try:
         ser = serial.Serial(_port, baudrate=_baudrate, timeout=COM_TOUT_S)
-        serIO = io.TextIOWrapper(io.BufferedRWPair(ser, ser), newline=None)
+        serIO = io.TextIOWrapper(
+            io.BufferedRWPair(ser, ser), newline=None
+        )
     except serial.serialutil.SerialException:
         ser = serIO = None   
     return ser, serIO
 
 
-def _listSerialPorts(lastPort=10) -> list:
+def _reopenSerialIO(_args :list):
+    global Ser, SerIO
+    Ser.close()
+    print("  Re-open serial port ...")
+    time.sleep(0.5)
+    Ser, SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
+
+
+def _listSerialPorts(verbose :bool =False) -> list:
     """ Return list of serial ports that can be opened
-        NOTE: Currently, Windows only
     """
-    assert platform.system().lower() == "windows"
+    tmp = serial_p.comports()
     ports = []
-    for i in range(lastPort):
-        try:
-            port = f"COM{i}"
-            ser = serial.Serial(port)
-            ser.close()
-            ports.append(port)
-        except serial.SerialException:
-            pass   
+    if len(tmp) == 0:
+        print("Error: No serial ports found.")
+    else:
+        print(f"{len(tmp)} serial port(s) found :")
+        for p in tmp:
+            print(f"  `{p.device}`, {p.description}")
+            ports.append(p.device)
     return ports
     
 
@@ -167,7 +188,7 @@ def cleanUp(errC :ErrCode, noClose :bool =False):
         log("Done.") 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def sendCommand(_cmd :str, doPrint=False) -> list:
+def sendCommand(_cmd :str, doPrint :bool =False, doDot :bool =False) -> list:
     """ Sends a command via the serial port to the Pico and returns the 
         REPL output as a list of strings; prints the reply, if `doPrint`
     """
@@ -175,10 +196,23 @@ def sendCommand(_cmd :str, doPrint=False) -> list:
     cmd = _cmd.lower()
     SerIO.write(cmd +"\n")
     SerIO.flush() 
+    if doDot:
+        print(".", end="")
     
     # Retrieve output
     done = False
     repl = []
+    '''
+    #t = time.monotonic()
+    res = SerIO.read().split("\n")
+    #print("dt=", time.monotonic() -t) #, " res=", res)
+    for ln in res:
+        # Filter out lines starting with `>` and the first line (which
+        # mirrors the command), and add the lines to a list
+        if len(ln) > 0 and ln[0] != ">" and cmd not in ln.lower():
+            repl.append(ln)
+
+    '''
     while not(done):
         #t = time.monotonic()
         res = SerIO.readline()
@@ -187,7 +221,6 @@ def sendCommand(_cmd :str, doPrint=False) -> list:
             # Filter out lines starting with `>` and the first line (which
             # mirrors the command), and add the lines to a list
             res = res[:-1]
-
             if len(res) > 0 and res[0] != ">" and res.lower() != cmd:
                 repl.append(res)
 
@@ -216,6 +249,8 @@ def _print(repl :list):
     
 
 def _print_progress_bar(index :int, total :int, pre :str, post :str):
+    """ Print progress bar
+    """
     n_bar = 50  
     progress = index /total
     sys.stdout.write('\r')
@@ -224,15 +259,35 @@ def _print_progress_bar(index :int, total :int, pre :str, post :str):
     )
     sys.stdout.flush()
 
+
+def _yesno(question :str, doDeleteLn=False):
+    """ Ask the user a yes/no question
+    """
+    sys.stdout.write(f"{question} (y/n)? ")
+    repl = input().lower() == 'y'
+    if doDeleteLn:
+        sys.stdout.flush()
+        sys.stdout.write('\r')
+    return repl    
+
 # ---------------------------------------------------------------------------
 # Retrieving general information from the PicoMite
 # ---------------------------------------------------------------------------
-def checkPicoMite(doDetailed=False) -> dict:
-    """ Check if PicoMite is responding and get version information
+def isPicoMitePresent() -> bool:
+    """ Check if PicoMite is responding
     """
-    log("Checking for PicoMite and retrieving key data ... ", noLF=True)
+    log(f"Checking for PicoMite ... ", noLF=True)
+    res = sendCommand("?MM.INFO(ID)")
+    log("done.", noHeader=True)
+    return len(res[0]) > 0
+
+
+def getPicoMite() -> dict:
+    """ Get version information from PicoMIte
+    """
+    print("Retrieving key data from PicoMite ", end="")
     ver = dict()
-    res = sendCommand("option list")
+    res = sendCommand("option list", doDot=True)
     if len(res) > 0:
         tmp = res[0].split()
         if "picomite" in tmp[0].lower():
@@ -240,21 +295,19 @@ def checkPicoMite(doDetailed=False) -> dict:
                 "firmware": tmp[0], 
                 "chip": tmp[2], "version": tmp[4]
             })
-    if doDetailed:
-        res = sendCommand("?MM.INFO$(CPUSPEED)")
-        ver.update({"cpu_speed": int(res[0])}) 
-        res = sendCommand("?MM.DEVICE$")
-        ver.update({"device": res[0]}) 
-        res = sendCommand("?MM.INFO$(DRIVE)")
-        ver.update({"drive": res[0]}) 
-        res = sendCommand("?MM.INFO(FREE SPACE)")
-        ver.update({"free_disk_space": int(res[0])}) 
-        res = sendCommand("?MM.INFO(DISK SIZE)")
-        ver.update({"total_disk_space": int(res[0])})             
-        res = sendCommand("?MM.INFO(ID)")
-        ver.update({"ID": res[0]})             
-
-    log("done.", noHeader=True)
+    res = sendCommand("?MM.INFO$(CPUSPEED)", doDot=True)
+    ver.update({"cpu_speed": int(res[-1])}) 
+    res = sendCommand("?MM.DEVICE$", doDot=True)
+    ver.update({"device": res[-1]}) 
+    res = sendCommand("?MM.INFO$(DRIVE)", doDot=True)
+    ver.update({"drive": res[-1]}) 
+    res = sendCommand("?MM.INFO(FREE SPACE)", doDot=True)
+    ver.update({"free_disk_space": int(res[-1])}) 
+    res = sendCommand("?MM.INFO(DISK SIZE)", doDot=True)
+    ver.update({"total_disk_space": int(res[-1])})             
+    res = sendCommand("?MM.INFO(ID)", doDot=True)
+    ver.update({"ID": res[-1]})      
+    print(" done.")       
     return ver
 
 # ---------------------------------------------------------------------------
@@ -305,7 +358,7 @@ def getAbsLocalPath(path_local :str) -> str:
     return path_local_abs.replace("\\", "/") # +"/"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def getFileTree(drive :str) -> list:
+def getFileTree(drive :str, verbose :bool =True) -> list:
     """ Returns the complete file tree on `drive` as a list of paths in the
         form  `[errCode, msg, pathlist]`
     """
@@ -347,15 +400,15 @@ def getFileTree(drive :str) -> list:
     drive += "/" if drive[-1] != "/" else ""
     path = ""
     dlist = []
-    isDone = False
 
     # Generate tree
-    while not(isDone):
-        print(f"  Parsing `{drive +path}` ...")
+    while True:
+        if verbose:
+            print(f"  Parsing `{drive +path}` ...")
         fsubtree, dsublist = _getSubTree(drive, path)
         ftree += fsubtree
         dlist += dsublist
-        if isDone := len(dlist) == 0:
+        if len(dlist) == 0:
             break
         path = dlist.pop(0)
 
@@ -367,21 +420,89 @@ def getFileTree(drive :str) -> list:
     print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
     return [ErrCode.OK, "", ftree]
     
+
+def getFileTreeLocal(path_local :str) -> list:
+    """ Returns the complete local file tree in `path` as a list of paths 
+        in the form  `[errCode, msg, pathlist]`
+    """
+    def _getSubTreeLocal(_path :str) -> list:
+        ftree = []
+        dlist = []
+        ftree_sub = list(Path(_path).iterdir())
+        for ln in ftree_sub:
+            if ln.is_dir():
+                dir = ln.__str__()
+                ftree.append([dir, ElementType.IS_FOLDER])
+                dlist.append(dir)
+            else:
+                ftree.append([ln.__str__(), ElementType.IS_FILE])    
+        return ftree, dlist    
+    
+    # Initialise
+    print(f"Retrieving file tree from `{path_local}` :")
+    ftree = []
+    path = path_local
+    dlist = []
+
+    # Generate tree
+    while True:
+        print(f"  Parsing `{path}` ...")
+        fsubtree, dsublist = _getSubTreeLocal(path)
+        ftree += fsubtree
+        dlist += dsublist
+        if len(dlist) == 0:
+            break
+        path = dlist.pop(0)
+
+    # Count folders and subfolders
+    ndir = 0
+    ntotal = len(ftree)
+    for ln in ftree:    
+        ndir += 1 if ln[1] is ElementType.IS_FOLDER else 0
+    print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
+    return [ErrCode.OK, "", ftree]
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def _xmodemSend(fname :str) -> ErrCode:
+def _xmodemSend(fname :str, _path_local :str ="") -> ErrCode:
     """ Send local file `fname` to the PicoMite using XMODEM. Returns True
         if transfer complete
     """            
     global xmodem_n_pkgs, xmodem_post    
-    
+
+    # Extend path, if `path_local` is defined
+    path_local = getAbsLocalPath(_path_local)
+    fname_local = Path(path_local).joinpath(Path(fname))
+    '''
+    print("fname_local", fname_local)
+    print("fname", fname)
+    '''
+
     # Calculate number of packages
-    fsize = Path(fname).stat().st_size
-    xmodem_n_pkgs = round(fsize /XMODEM_PKG_SIZE)
+    fsize = Path(fname_local).stat().st_size
+    n_pkgs = round(fsize /XMODEM_PKG_SIZE)
+    xmodem_n_pkgs = n_pkgs
     log(f"`{fname}` : Size: {fsize} bytes (= {xmodem_n_pkgs} packages)")
 
+    # Open local file and trigger transfer on PicoMite 
+    try:
+        stream = open(fname_local, "rb")
+    except FileNotFoundError:
+        print(f"Error: file `{fname_local.__str__()}` cannot be opened for reading.")
+        return False   
+    
     try:    
-        # Open local file and trigger transfer on PicoMite 
-        stream = open(fname, "rb")
+        # Check if `fname` contains folders and if so, if the folders
+        # exist on the PicoMite
+        tmp = fname.rsplit("/", 1)
+        if len(tmp) > 1:
+            if not checkFileExists(tmp[0]) == ElementType.IS_FOLDER:
+                # Create folder
+                log(f"Create folder `{tmp[0]}` ...")
+                cmd = f'mkdir "{tmp[0]}"'
+                log(f'Send `{cmd}` ...')
+                _ = sendCommand(cmd)
+
+        # Prepare transfer ...
         cmd = f'xmodem r "{fname}'
         log(f'Send `{cmd}` ...')
         _ = sendCommand(cmd)
@@ -400,8 +521,8 @@ def _xmodemSend(fname :str) -> ErrCode:
         modem = None
         stream.close()
 
-    print("\nGive PicoMite time to finish ... ", end="")
-    time.sleep(XMODEM_WAIT_S)
+    # Give PicoMite time to finish transfer ...
+    _wait_xmodem(n_pkgs, XMODEM_WAIT_S)    
         
     # Check if transferred file has the correct size
     fsize_pico = getFileSize(fname)
@@ -419,7 +540,8 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
     # Calculate number of packages
     fsize = getFileSize(fname)
     assert fsize > 0
-    xmodem_n_pkgs = round(fsize /XMODEM_PKG_SIZE)
+    n_pkgs = round(fsize /XMODEM_PKG_SIZE)
+    xmodem_n_pkgs = n_pkgs
     log(f"`{fname}` : Size: {fsize} bytes (= {xmodem_n_pkgs} packages)")
 
     # Extend path, if `path_local` is defined
@@ -451,14 +573,29 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
         modem = None
         stream.close()
 
-    print("\nGive PicoMite time to finish ... ", end="")
-    time.sleep(XMODEM_WAIT_S)
-        
+    # Give PicoMite time to finish transfer ...
+    _wait_xmodem(n_pkgs, XMODEM_WAIT_S)
+     
     # Check if transferred file has the correct size
-    fsize_local = Path(fname).stat().st_size
-    print("incomplete" if fsize_local < fsize else "complete", end="")
+    fsize_local = Path(path +fname).stat().st_size
+    print(" - incomplete" if fsize_local < fsize else " - complete", end="")
     print(f" ({fsize_local} of {fsize} bytes).")
     return fsize_local >= fsize
+
+
+def _wait_xmodem(n_curr :int, wait_s :float):
+    """ Wait while showing dots
+    """
+    global xmodem_pre, xmodem_post    
+    n_max = max(int(n_curr *1.1), 2)
+    n_dt = n_max -n_curr +1
+    dt = wait_s /n_dt
+    for i in range(n_dt):
+        time.sleep(dt)    
+        _print_progress_bar(
+            n_curr +i, n_max, 
+            xmodem_pre, xmodem_post
+        )
 
 
 def _progressSend(total_packets :int, success_count :int, error_count :int):
@@ -467,7 +604,10 @@ def _progressSend(total_packets :int, success_count :int, error_count :int):
     global xmodem_n_pkgs, xmodem_post
     #print(total_packets, success_count, error_count)    
     if xmodem_n_pkgs > 0:
-        _print_progress_bar(success_count, xmodem_n_pkgs, xmodem_pre, xmodem_post)
+        _print_progress_bar(
+            success_count, max(int(xmodem_n_pkgs *1.1), 2), 
+            xmodem_pre, xmodem_post
+        )
     if success_count == xmodem_n_pkgs:
         xmodem_n_pkgs = 0
 
@@ -479,7 +619,10 @@ def _progressRecv(total_packets :int, success_count :int, error_count :int, pack
     assert xmodem_pkg_size == packet_size
     #print(total_packets, success_count, error_count, packet_size)
     if xmodem_n_pkgs > 0:
-        _print_progress_bar(success_count, xmodem_n_pkgs, xmodem_pre, xmodem_post)
+        _print_progress_bar(
+            success_count, max(int(xmodem_n_pkgs *1.1), 2), 
+            xmodem_pre, xmodem_post
+        )
     if success_count == xmodem_n_pkgs:
         xmodem_n_pkgs = 0
     
@@ -512,6 +655,30 @@ def _files(_args :list) -> tuple:
 
     _print(repl)
     return (ErrCode.OK, "", repl)
+
+
+def _filetree(_args :list) -> tuple:
+    """ List filetree of given drive
+    """
+    # Check if drive is available and ready
+    errMsg = checkDrive(_args.drive, doChange=False)
+    if errMsg[0] != ErrCode.OK:
+        return errMsg
+    
+    # Retrieve filetree
+    repl = getFileTree(_args.drive, verbose=False)
+    if repl[0] != ErrCode.OK:
+        return repl
+    
+    # Present filetree
+    ftree = repl[2]
+    print(f"Content of `{_args.drive}` :")
+    for ln in ftree:
+        print(ln[0])
+    # ***************
+    # TODO: sorted    
+    # ***************
+    return (ErrCode.OK, "", [])
 
 
 def _kill(_args :list) -> tuple:
@@ -592,48 +759,245 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
 def _backup(_args :list) -> tuple:
     """ Create a backup of the given drive
     """
-    # Check if drive is available and ready
+    global xmodem_pre
+
+    # Check if drive on PicoMite is available and ready
+    log("Check drive ...")
     errMsg = checkDrive(_args.drive, doChange=False)
     if errMsg[0] != ErrCode.OK:
         return errMsg
 
-    # Check if a folder with `name` does not already exist
+    # Check if a local folder with `name` does not already exist
     if len(_args.name) == 0:
         return (
             ErrCode.PARAM_MISSING, 
             "`-n` as name of backup is required", 
             []
         )
+    
+    # Create a unique local folder for the backup
+    log("Create unique local folder for backup ...")
     now = datetime.datetime.now().__str__().split(".")[0][:-2]
     stamp = now.replace(" ", "").replace(":", "").replace("-", "")
     path_local = _args.name +"_" +stamp
-    path_local_abs = Path(path_local).resolve()
-    if Path(path_local_abs).is_dir():
+    path_local_abs_obj = Path(path_local).resolve()
+    if path_local_abs_obj.is_dir():
         return (
             ErrCode.FOLDER_EXISTS, 
-            f"`{path_local_abs}` already exists, cannot overwrite existing backup",
+            f"`{path_local_abs_obj}` already exists, cannot overwrite existing backup",
             []
         )
+    path_local_abs_obj.mkdir()
+
+    # Get PicoMite options and save as a file in the backup folder
+    log("Get option list ...")
+    cmd = "option list"
+    log(f"Sending `{cmd}` ...")    
+    repl = sendCommand(cmd)
+    tmp = path_local_abs_obj.__str__() +"/" +MASK_OPT_TXT.format(stamp)
+    with open(tmp, "w") as f:
+        for ln in repl[1:]:
+            f.write(ln +"\n")
+
+    # Create a options file on the PicoMite
+    fname_opt = stamp +FILE_EXT_OPT
+    print(f'  Save options to "{fname_opt}" file ...')
+    cmd = f'option disk save "{fname_opt}"'
+    log(f"Sending `{cmd}` ...")    
+    _ = sendCommand(cmd)
+
+    # Check if library is used and if so, create library file on Picomite
+    fname_lib = stamp +FILE_EXT_LIB
+    print(f"  Save library, if exists, to `{fname_lib}` ...")    
+    cmd = f'library disk save "{fname_lib}"'
+    log(f"Sending `{cmd}` ...")    
+    repl = sendCommand(cmd)
+    if len(repl) > 0 and "error" in repl[0].lower():
+        log("No library found")
 
     # Get file tree
     errC, msg, ftree = getFileTree(_args.drive)
     if errC != ErrCode.OK:
         return (errC, msg, [])
 
+    # Write file tree as a file list into a local text file
+    tmp = path_local_abs_obj.__str__() +"/" +MASK_FTREE_TXT.format(stamp)
+    with open(tmp, "w") as f:
+        for ln in ftree:
+            f.write(ln[0] +"," +str(ln[1]) +"\n")
+
     # Getting ready
-    print(f"Create backup of PicoMite @ `{_args.serial}` :")
-    print(f"  Backup folder : `{path_local_abs}`")
-    path = _args.drive
+    print(f"Create backup of PicoMite @`{_args.serial}` :")
+    print(f"  Backup folder : `{path_local_abs_obj}`")
+    nFail = 0
+    nFolders = 0
+    nFiles = 0
 
     # Go through file tree ...
     for ln in ftree:
         if ln[1] == ElementType.IS_FOLDER:
             # Create folder if needed
-            # path_local_abs
-            print("make folder", ln[0])
+            pobj = Path(path_local_abs_obj.__str__() +"/" +ln[0])
+            pobj.mkdir(exist_ok=False)
+            print(f"Create local folder `{pobj.__str__()}`")
+            nFolders += 1
+
         else:
-            print("retrieve file", ln[0])    
-              
+            # Check if file exists
+            fname = ln[0]
+            res = checkFileExists(fname)
+            if res is not ElementType.IS_FILE:
+                print(f"Error: File `{fname}` not found ... skipped.")
+                nFail += 1                
+                continue
+
+            # Do transfer ...        
+            xmodem_pre = "Backup"     
+            res = _xmodemReceive(fname, path_local_abs_obj.__str__())
+            nFail += 0 if res else 1  
+            nFiles += 1
+
+    # Finish
+    if nFail == 0:
+        print(f"Backup `{path_local}` successfully created.")
+    print(f"  {nFiles} file(s) and {nFolders} folder(s) saved; {nFail} failed")    
+
+    return (ErrCode.OK, "", [])
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def _restore(_args :list, info :dict) -> tuple:
+    """ Restore a backup of the given drive
+    """
+    global xmodem_pre
+
+    # Check if drive on PicoMite is available and ready
+    log("Check drive ...")
+    errMsg = checkDrive(_args.drive, doChange=False)
+    if errMsg[0] != ErrCode.OK:
+        return errMsg
+
+    # Check if a local backup folder `name` exists
+    log("Locate backup ...")
+    if len(_args.name) == 0:
+        return (
+            ErrCode.PARAM_MISSING, 
+            "`-n` as name of backup is required", 
+            []
+        )
+    path_local_abs_obj = Path(_args.name).resolve()
+    if not(path_local_abs_obj.is_dir()):
+        return (
+            ErrCode.FOLDER_MISSING, 
+            f"`Backup folder {path_local_abs_obj}` not found",
+            []
+        )
+    # Get date-time stamp, assuming it its the end of the backup name;
+    # get also names of backup management files for excluding later from
+    # the restore ... 
+    stamp = _args.name.split("_")[1]
+    assert len(stamp) > 0
+    ignore_list = [
+        MASK_OPT_TXT.format(stamp).lower(),
+        MASK_FTREE_TXT.format(stamp).lower()
+    ]
+    
+    # Get filetree from local backup folder
+    errC, msg, ftree = getFileTreeLocal(path_local_abs_obj.__str__())
+    if errC != ErrCode.OK:
+        return (errC, msg, [])
+        
+    # Everything is ready, ask user if to continue ...
+    path_local_backup = path_local_abs_obj.__str__()
+    print(f"Restoring backup `{path_local_backup}` to `{info['firmware']}` @`{_args.serial}` :")
+    if not(_yesno("Continue")):
+        return (ErrCode.USER_ABORT, "", [])        
+
+    # Kill everything before backup?
+    if _yesno(f"Kill everything on drive `{_args.drive}`"):
+        if _yesno("Really?!?", doDeleteLn=True):
+            # Kill drive ...
+            print(f"  Formatting drive `{_args.drive}` ... ")
+            cmd = f'drive "{_args.drive}/FORMAT"'
+            log(f"Sending `{cmd}` ...")    
+            repl = sendCommand(cmd)
+            time.sleep(1.5)
+
+    # Restore ...
+    nFail = 0
+    nFolders = 0
+    nFiles = 0
+    for ln in ftree:
+        # Get path relative to backup folder, this will be the path on the
+        # Picomite
+        pobj = Path(ln[0]).relative_to(path_local_abs_obj)
+        #pobj_local = Path(ln[0])
+        #path_backup = pobj_local.
+        fname = pobj.__str__().replace("\\", "/")
+
+        if ln[1] == ElementType.IS_FILE:
+            fname_only = pobj.name.lower()
+            if fname_only not in ignore_list:
+                # Restore file ...
+                xmodem_pre = "Restore"     
+                res = _xmodemSend(fname, _path_local=path_local_backup)
+                nFail += 0 if res else 1  
+                nFiles += 1                
+            
+        elif ln[1] == ElementType.IS_FOLDER:
+            # Make folder ...
+            nFolders += 1
+            if not checkFileExists(fname) == ElementType.IS_FOLDER:
+                # Create folder
+                    print(f"Make folder `{fname}` ...")
+                    cmd = f'mkdir "{fname}"'
+                    log(f'Send `{cmd}` ...')
+                    _ = sendCommand(cmd)
+        else:
+            print(f"Error: Unknown element")                     
+            nFail += 1
+
+    # Restore PicoMite options, if stored and requested
+    fname_opt = stamp +FILE_EXT_OPT
+    pobj = path_local_abs_obj.joinpath(Path(fname_opt))
+    if pobj.is_file():
+        # Option file exists, restore as well?
+        if _yesno("Restore PicoMite options"):
+            print("  Reset options ...")
+            cmd = 'option reset'
+            log(f"Sending `{cmd}` ...")    
+            _ = sendCommand(cmd)
+            
+            time.sleep(1.5)
+            _reopenSerialIO(_args)            
+            time.sleep(1.0)
+
+            print(f"  Restore options from `{fname_opt}` ...")
+            cmd = f'option disk load "{fname_opt}"'
+            log(f"Sending `{cmd}` ...")    
+            _ = sendCommand(cmd)
+
+            time.sleep(1.5)
+            _reopenSerialIO(_args)            
+            time.sleep(1.0)
+            print("done.")
+
+    # Check if library file with backup's name and restore, if requested
+    fname_lib = stamp +FILE_EXT_LIB
+    if checkFileExists(fname_lib) == ElementType.IS_FILE:
+        if _yesno(f"Restore library from `{fname_lib}`"):
+            cmd = f'library disk load "{fname_lib}"'
+            log(f"Sending `{cmd}` ...")    
+            _ = sendCommand(cmd)
+            print("done.")
+
+    # Finish
+    if nFail == 0:
+        print(f"Backup `{path_local_backup}` successfully restored.")
+    print(
+        f"  {nFiles} file(s) copied, {nFolders} folder(s) created; "
+        f"{nFail} failed\n"    
+        f"  {len(ignore_list)} backup management files ignored"    
+    )
     return (ErrCode.OK, "", [])
 
 # ---------------------------------------------------------------------------
@@ -675,10 +1039,6 @@ if __name__ == "__main__":
     if args.command in ["p", "ports"]:
         # List available serial ports and exit
         ports = _listSerialPorts()
-        print("Serial ports :")
-        for p in ports:
-            print("  " +p, end="")
-        print()    
         cleanUp(ErrCode.OK, noClose=True)
         sys.exit()
 
@@ -688,17 +1048,16 @@ if __name__ == "__main__":
         print(f"Error: Could not open port `{args.serial}`.")
         sys.exit()
 
-    info = checkPicoMite(doDetailed=args.command in ["c", "check"])
-    isConnected = not info == {}
+    isConnected = isPicoMitePresent()
     if not isConnected:
         print(f"Error: No PicoMite at `{args.serial}`.")
         cleanUp(ErrCode.NO_PICO_FOUND)
         sys.exit()
     
     # Process command
-    if args.command in ["dummy"]:
-        # Dummy command for testing ...
-        res = getFileTree(args.drive)
+    if args.command in ["ft", "filetree"]:
+        # List complete filetree of given drive
+        res = _filetree(args)
 
     elif args.command in ["f", "files"]:
         # List directory of given drive
@@ -713,8 +1072,13 @@ if __name__ == "__main__":
         res = _kill(args)        
         '''
     elif args.command in ["b", "backup"]:
-        # Create backup of connected PicoMite
+        # Create a backup of connected PicoMite
         res = _backup(args)
+
+    elif args.command in ["r", "restore"]:
+        # Restore a backup to the connected PicoMite
+        info = getPicoMite()
+        res = _restore(args, info)
 
     elif args.command in ["xs", "xmodem s"]:
         # Send file (or files) via XModem
@@ -726,7 +1090,8 @@ if __name__ == "__main__":
 
     elif args.command in ["c", "check"]:    
         # Return version information
-        print(f"  Firmware      : {info['firmware']} @ `{args.serial}`")
+        info = getPicoMite()
+        print(f"  Firmware      : {info['firmware']} @`{args.serial}`")
         print(f"  Chip          : {info['chip']}")
         print(f"  MMBasic       : {info['version']}")
         print(f"  CPU frequency : {round(info['cpu_speed'] /1E6)} MHz")
@@ -742,9 +1107,11 @@ if __name__ == "__main__":
         res = [ErrCode.INVALID_CMD]
 
     # Handle error messages, if any
-    if res[0] == ErrCode.INVALID_DRIVE:            
+    if res[0] == ErrCode.USER_ABORT:
+        print("Aborted by user")
+    elif res[0] == ErrCode.INVALID_DRIVE:            
         print(f"Error: Invalid drive parameter (`{res[1]}`)")
-    if res[0] == ErrCode.INVALID_PATH:
+    elif res[0] == ErrCode.INVALID_PATH:
         print(f"Error: Invalid path (`{res[1]}`)") 
     elif res[0] == ErrCode.INVALID_CMD:
         print(f"Error: Command `{args.command}` not recognized")    
