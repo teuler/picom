@@ -68,4 +68,4 @@ options:
 ## Open issues
 - Linux: Reconnecting to Pico after sending a command that resets the serial connection (e.g., `option reset`)
   does not yet work, because the Pico does not necessarily connects to the same device address.
-
+- `xmodem r`: when receiving files from subfolders on the PicoMite, the local target folder needs to exist (is not automatically created)
