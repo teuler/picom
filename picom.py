@@ -546,7 +546,9 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
 
     # Extend path, if `path_local` is defined
     print("path_local", path_local)
+    print("fname", fname)
     path = getAbsLocalPath(path_local)
+    print("path", path)
 
     # Open local target file and trigger transfer from PicoMite 
     try:
