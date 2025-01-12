@@ -578,7 +578,7 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
     _wait_xmodem(n_pkgs, XMODEM_WAIT_S)
      
     # Check if transferred file has the correct size
-    fsize_local = Path(path +fname).stat().st_size
+    fsize_local = Path(path, fname).stat().st_size
     print(" - incomplete" if fsize_local < fsize else " - complete", end="")
     print(f" ({fsize_local} of {fsize} bytes).")
     return fsize_local >= fsize
