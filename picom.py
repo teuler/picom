@@ -353,10 +353,7 @@ def getAbsLocalPath(path_local :str) -> str:
     """  
     if len(path_local) == 0:
         return ""
-    #assert platform.system().lower() == "windows"      
-    path_local_abs = Path(path_local).resolve().__str__() # +"\\"
-    #return path_local_abs.replace("\\", "/") # +"/"
-    return path_local_abs
+    return Path(path_local).resolve().__str__()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 def getFileTree(drive :str, verbose :bool =True) -> list:
@@ -546,14 +543,14 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
     log(f"`{fname}` : Size: {fsize} bytes (= {xmodem_n_pkgs} packages)")
 
     # Extend path, if `path_local` is defined
-    print("path_local", path_local)
-    print("fname", fname)
+    #print("path_local", path_local)
+    #print("fname", fname)
     path = getAbsLocalPath(path_local)
-    print("path", path)
+    #print("path", path)
 
     # Open local target file and trigger transfer from PicoMite 
     try:
-        stream = open(path +fname, "wb")
+        stream = open(Path(path, fname), "wb")
     except FileNotFoundError:
         print(f"Error: file `{path +fname}` cannot be opened for writing.")
         return False   
