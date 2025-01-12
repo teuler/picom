@@ -98,8 +98,6 @@ def getCmdLineArgs() -> list:
               ol, "option list"  Print options set on PicoMite
               f, "files"         List files on given drive and current folder
                                  (considers options `-d`, `-p`)   
-              ft, "filetree"     List all files                 
-                                 (considers option `-d`)         
               xs, "xmodem s"     Send file(s) to PicoMite
                                  (requires option `-f`, considers `-d`, `-p`)   
               xr, "xmodem r"     Retrieve file(s) from Picomite
@@ -111,6 +109,10 @@ def getCmdLineArgs() -> list:
         '''), 
         epilog=''
     )
+    '''
+              ft, "filetree"     List all files                 
+                                 (considers option `-d`)         
+    '''
     _parser.add_argument("command")
     _parser.add_argument(
         "-s", "--serial", 
@@ -673,6 +675,7 @@ def _filetree(_args :list) -> tuple:
     
     # Present filetree
     ftree = repl[2]
+    #print(ftree)
     print(f"Content of `{_args.drive}` :")
     for ln in ftree:
         print(ln[0])
@@ -970,7 +973,7 @@ def _restore(_args :list, info :dict) -> tuple:
             
             time.sleep(1.5)
             _reopenSerialIO(_args)            
-            time.sleep(3.0)
+            time.sleep(1.5)
 
             print(f"  Restore options from `{fname_opt}` ...")
             cmd = f'option disk load "{fname_opt}"'
@@ -979,7 +982,7 @@ def _restore(_args :list, info :dict) -> tuple:
 
             time.sleep(1.5)
             _reopenSerialIO(_args)            
-            time.sleep(3.0)
+            time.sleep(1.5)
             print("done.")
 
     # Check if library file with backup's name and restore, if requested

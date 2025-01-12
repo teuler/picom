@@ -11,4 +11,4 @@ xmodem_wait_s = 1.5
 xmodem_package_size_bytes = 128
 
 [debugging]
-verbose = 1
+verbose = 0
