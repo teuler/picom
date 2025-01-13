@@ -34,7 +34,7 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 
 
 ## Usage
-Enter `python picom.py -h` to get help:
+Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
 PicoM v0.1.2 (beta)
 usage: PicoM v0.1.2 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
