@@ -65,6 +65,12 @@ options:
   -n NAME, --name NAME  Name of backup to generate or restore
 ```
 
+## Release notes
+- v0.1.2
+  - First release
+- v0.1.3
+  - Send `Ctr-C` after opening a serial port to interrupt any running program  
+
 ## Open issues
 - Linux: Reconnecting to Pico after sending a command that resets the serial connection (e.g., `option reset`)
   does not yet work, because the Pico does not necessarily connects to the same device address.
