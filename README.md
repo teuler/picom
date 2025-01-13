@@ -23,6 +23,11 @@
    cd picom
    ```
 
+The configuration file `picom.toml` contains some basic settings, such as the preferred serial port and the baudrate.
+Here, the program can be tuned. For example, for `com_baudrate = 921600`, a wait time for finishing an XMODEM transfer of `xmodem_wait_s = 1.5` is sufficient.
+At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wait_s = 3.0`), otherwise the program may fail.
+
+
 ## Usage
 Enter `python picom.py -h` to get help:
 ```
