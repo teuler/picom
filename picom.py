@@ -23,7 +23,7 @@ from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.2 (beta)"
+PROG_VER       = "0.1.3 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -145,14 +145,18 @@ def getCmdLineArgs() -> list:
 # ---------------------------------------------------------------------------
 # Handling of serial port
 # ---------------------------------------------------------------------------
-def createSerialIO(_port :str, _baudrate :int) -> tuple:
+def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
     """ Open and return a serial port instance
     """ 
     try:
+        # Open serial port and create TextIOWrapper
         ser = serial.Serial(_port, baudrate=_baudrate, timeout=COM_TOUT_S)
-        serIO = io.TextIOWrapper(
-            io.BufferedRWPair(ser, ser), newline=None
-        )
+        serIO = io.TextIOWrapper(io.BufferedRWPair(ser, ser), newline=None)
+
+        # Send Ctrl-C to interrupt any running program
+        if doCtrlC:
+            serIO.write(chr(0x03) +chr(0x43))            
+
     except serial.serialutil.SerialException:
         ser = serIO = None   
     return ser, serIO
