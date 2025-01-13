@@ -1,5 +1,5 @@
 # picom
- A file synchronisation tool for PicoMite
+ A file synchronisation tool for the {PicoMite}(https://geoffg.net/picomite.html) family, Raspberry Pico Pico(2) microcontrollers running MMBasic by Geoff Graham and Peter Mather.
 
 ## Installation
 1) Clone the repository and create an environment.
