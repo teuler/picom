@@ -2,6 +2,7 @@
  A file synchronisation tool for the [PicoMite](https://geoffg.net/picomite.html) family, Raspberry Pico Pico(2) microcontrollers running MMBasic by Geoff Graham and Peter Mather.
 
 ## Installation
+### As a Python script
 1) Clone the repository and create an environment.
    ```
    git clone https://github.com/teuler/picom.git
@@ -22,6 +23,8 @@
    pip install xmodem
    cd picom
    ```
+### As an `.exe` file (Windows)
+The archive `picom_v0_1_2_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
    
 ## Configuration `picom.toml`
 This file contains some basic settings, such as the preferred serial port and the baudrate.
@@ -31,7 +34,7 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 
 
 ## Usage
-Enter `python picom.py -h` to get help:
+Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
 PicoM v0.1.2 (beta)
 usage: PicoM v0.1.2 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
