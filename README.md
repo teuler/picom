@@ -36,8 +36,8 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 ## Usage
 Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
-PicoM v0.1.2 (beta)
-usage: PicoM v0.1.2 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
+PicoM v0.1.4 (beta)
+usage: PicoM v0.1.4 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
 
 A file synchronisation tool for PicoMite.
 Note that the quotes are only required for multiple-word commands. All file
@@ -76,10 +76,12 @@ options:
 ```
 
 ## Release notes
+- v0.1.4
+  - Filetree command added
+- v0.1.3
+  - Send `Ctr-C` after opening a serial port to interrupt any running program
 - v0.1.2
   - First release
-- v0.1.3
-  - Send `Ctr-C` after opening a serial port to interrupt any running program  
 
 ## Open issues
 - Linux: Reconnecting to Pico after sending a command that resets the serial connection (e.g., `option reset`)
