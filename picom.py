@@ -23,7 +23,7 @@ from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.3 (beta)"
+PROG_VER       = "0.1.4 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -33,7 +33,7 @@ FILE_EXT_LIB   = ".lib"
 # ---------------------------------------------------------------------------
 # Default configuration (replaced by content of `picom.toml`)
 #
-COM_PORT        = "COM1"
+COM_PORT        = "COM5"
 COM_BAUDRATE    = 921_600
 COM_TOUT_S      = 0.2
 
@@ -41,7 +41,7 @@ XMODEM_RETRY    = 8
 XMODEM_WAIT_S   = 1.5
 XMODEM_PKG_SIZE = 128
 
-VERBOSE         = True
+VERBOSE         = False
 
 # ---------------------------------------------------------------------------
 class ErrCode:
@@ -98,6 +98,8 @@ def getCmdLineArgs() -> list:
               ol, "option list"  Print options set on PicoMite
               f, "files"         List files on given drive and current folder
                                  (considers options `-d`, `-p`)   
+              ft, "filetree"     List all files                 
+                                 (considers option `-d`)         
               xs, "xmodem s"     Send file(s) to PicoMite
                                  (requires option `-f`, considers `-d`, `-p`)   
               xr, "xmodem r"     Retrieve file(s) from Picomite
@@ -109,10 +111,6 @@ def getCmdLineArgs() -> list:
         '''), 
         epilog=''
     )
-    '''
-              ft, "filetree"     List all files                 
-                                 (considers option `-d`)         
-    '''
     _parser.add_argument("command")
     _parser.add_argument(
         "-s", "--serial", 
@@ -368,6 +366,64 @@ def getFileTree(drive :str, verbose :bool =True) -> list:
     """
     def _getSubTree(drive :str, path :str) -> list:
         ftree = []
+        cmd = f'files "{drive +path}"'
+        log(f"Sending `{cmd}` ...")
+        repl = sendCommand(cmd)    
+        for i, ln in enumerate(repl):
+            if i < 3 or i > len(repl) -2:
+                # Skip the first three lines with the drive, `.`, and `..`
+                # and last line
+                continue
+            
+            tmp = ln.split()
+            if len(tmp) == 2 and "DIR" in tmp[0]:
+                # Is folder
+                _new_path = path +tmp[1] +"/"
+                ftree.append([_new_path, ElementType.IS_FOLDER])
+                res = _getSubTree(drive, _new_path)    
+                if len(res) > 0:
+                    ftree += res
+
+            elif len(tmp) == 4:
+                # Is file
+                ftree.append([path +tmp[-1], ElementType.IS_FILE])
+
+            else:
+                print(f"Warning: Entry #{i} (`{ln}`) not recognized.")    
+
+        return ftree
+
+
+    # Check if drive ok
+    res = checkDrive(drive)
+    if res[0] is not ErrCode.OK:
+        return res
+    
+    # Initialise
+    print(f"Retrieving file tree from `{drive}` :")
+    drive += "/" if drive[-1] != "/" else ""
+    path = ""
+
+    # Generate tree
+    if verbose:
+        print(f"  Parsing `{drive +path}` ...")
+    ftree = _getSubTree(drive, path)
+
+    # Count folders and subfolders
+    ndir = 0
+    ntotal = len(ftree)
+    for ln in ftree:    
+        ndir += 1 if ln[1] is ElementType.IS_FOLDER else 0
+    print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
+    return [ErrCode.OK, "", ftree]
+
+'''
+def getFileTree(drive :str, verbose :bool =True) -> list:
+    """ Returns the complete file tree on `drive` as a list of paths in the
+        form  `[errCode, msg, pathlist]`
+    """
+    def _getSubTree(drive :str, path :str) -> list:
+        ftree = []
         dlist = []
         cmd = f'files "{drive +path}"'
         log(f"Sending `{cmd}` ...")
@@ -423,7 +479,7 @@ def getFileTree(drive :str, verbose :bool =True) -> list:
         ndir += 1 if ln[1] is ElementType.IS_FOLDER else 0
     print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
     return [ErrCode.OK, "", ftree]
-    
+'''    
 
 def getFileTreeLocal(path_local :str) -> list:
     """ Returns the complete local file tree in `path` as a list of paths 
@@ -679,13 +735,42 @@ def _filetree(_args :list) -> tuple:
     
     # Present filetree
     ftree = repl[2]
-    #print(ftree)
+    flev = 0
+    iLast = len(ftree) -1
+
     print(f"Content of `{_args.drive}` :")
-    for ln in ftree:
-        print(ln[0])
-    # ***************
-    # TODO: sorted    
-    # ***************
+    for i, ln in enumerate(ftree):
+        entry = ln[0].strip("/")
+        isLast = i == iLast
+        flev = len(entry.split("/")) -1
+        endFolder = False
+        if i < iLast:
+            endFolder = (len(ftree[i+1][0].split("/")) -1) < flev 
+
+        if ln[1] is ElementType.IS_FILE:
+            head = "│  " *flev
+            head += "└──" if isLast or endFolder else "├──"
+            fname = entry.split("/")[-1]
+            #print(f"{head}{entry} ({fname})")
+            print(f"{head}{fname}")
+
+        elif ln[1] is ElementType.IS_FOLDER:
+            head = "│  " *flev
+            head += "└──" if isLast else "├──"
+            dname = entry.split("/")[-1]
+            #print(f"{head}{entry} ({dname})")
+            print(f"{head}{dname}")
+
+        else:
+            print("?")    
+
+        last_flev = flev
+    '''
+    "├"
+    "─"
+    "└"
+    '''    
+
     return (ErrCode.OK, "", [])
 
 
