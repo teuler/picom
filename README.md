@@ -79,6 +79,8 @@ options:
 - v0.1.5
   - Bug fixed in filetree representation
   - Now user is asked if to proceed, if file that is transferred already exists
+  - `picom.toml` has a new parameter `ask_questions`; if set to 0, most questions (e.g., overwrite target file)
+    are suppressed.
 - v0.1.4
   - Filetree command added
 - v0.1.3
