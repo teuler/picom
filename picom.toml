@@ -12,3 +12,4 @@ xmodem_package_size_bytes = 128
 
 [debugging]
 verbose = 0
+ask_questions = 1

@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 # ---------------------------------------------------------------------------
 # picom.py
-# ...
+# A file synchronisation tool for PicoMite. 
+# For release notes, see https://github.com/teuler/picom/blob/main/README.md
 #
 # The MIT License (MIT)
 # Copyright (c) 2025 Thomas Euler
@@ -23,7 +24,7 @@ from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.4 (beta)"
+PROG_VER       = "0.1.5 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -42,6 +43,7 @@ XMODEM_WAIT_S   = 1.5
 XMODEM_PKG_SIZE = 128
 
 VERBOSE         = False
+ASK_QUESTIONS   = True
 
 # ---------------------------------------------------------------------------
 class ErrCode:
@@ -267,11 +269,9 @@ def _print_progress_bar(index :int, total :int, pre :str, post :str):
 def _yesno(question :str, doDeleteLn=False):
     """ Ask the user a yes/no question
     """
-    sys.stdout.write(f"{question} (y/n)? ")
-    repl = input().lower() == 'y'
+    repl = input(f"{question} (y/n)? ").lower() == 'y'
     if doDeleteLn:
-        sys.stdout.flush()
-        sys.stdout.write('\r')
+        print('\033[1A' + '\x1b[2K', end="")
     return repl    
 
 # ---------------------------------------------------------------------------
@@ -335,11 +335,16 @@ def checkFileExists(fname :str) -> ElementType:
     """
     repl = sendCommand(f'?MM.INFO(EXISTS FILE "{fname}")')
     assert len(repl) > 0
-    if int(repl[-1].strip()) == 1:
-        return ElementType.IS_FILE
-    repl = sendCommand(f'?MM.INFO(EXISTS DIR "{fname}")')
-    if int(repl[-1].strip()) == 1:    
-        return ElementType.IS_FOLDER
+    try:
+        if int(repl[-1].strip()) == 1:
+            return ElementType.IS_FILE
+        repl = sendCommand(f'?MM.INFO(EXISTS DIR "{fname}")')
+        if int(repl[-1].strip()) == 1:    
+            return ElementType.IS_FOLDER
+        
+    except ValueError:
+        log(f"Internal error in `checkFileExists(`{fname}`)` : repl[-1] == `{repl[-1]}`")    
+
     return ElementType.IS_NONE
 
 
@@ -523,7 +528,7 @@ def getFileTreeLocal(path_local :str) -> list:
     return [ErrCode.OK, "", ftree]
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def _xmodemSend(fname :str, _path_local :str ="") -> ErrCode:
+def _xmodemSend(fname :str, _path_local :str ="") -> bool:
     """ Send local file `fname` to the PicoMite using XMODEM. Returns True
         if transfer complete
     """            
@@ -586,7 +591,7 @@ def _xmodemSend(fname :str, _path_local :str ="") -> ErrCode:
         
     # Check if transferred file has the correct size
     fsize_pico = getFileSize(fname)
-    print("incomplete" if fsize_pico < fsize else "complete", end="")
+    print(" - incomplete" if fsize_pico < fsize else " - complete", end="")
     print(f" ({fsize_pico} of {fsize} bytes).")
     return fsize_pico >= fsize
 
@@ -745,7 +750,9 @@ def _filetree(_args :list) -> tuple:
         flev = len(entry.split("/")) -1
         endFolder = False
         if i < iLast:
-            endFolder = (len(ftree[i+1][0].split("/")) -1) < flev 
+            next_entry = ftree[i+1][0].strip("/")
+            #print(next_entry, len(next_entry.split("/")) -1, flev)
+            endFolder = (len(next_entry.split("/")) -1) < flev 
 
         if ln[1] is ElementType.IS_FILE:
             head = "│  " *flev
@@ -802,6 +809,7 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
     """
     global xmodem_pre 
     nFail = 0
+    nSkipped = 0
 
     if len(_args.files) == 0:
         print("No file name(s) defined, nothing to do.")
@@ -817,9 +825,18 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
             fname = _args.path +fname
             fobj = Path(fname)
             if not(fobj.is_file()):
+                # Source file not found, skip
                 print(f"Error: File `{fname}` not found ... skipped.")
                 nFail += 1
                 continue
+    
+            if ASK_QUESTIONS and checkFileExists(fname) == ElementType.IS_FILE:
+                # Target file already exists, overwrite?
+                if not(_yesno(f"File `{fname}` already exists - overwrite", doDeleteLn=True)):
+                    # Skip file
+                    print(f"File `{fname}` skipped by user.")
+                    nSkipped += 1
+                    continue
 
             # Do transfer ...        
             res = _xmodemSend(fname, folder_local)
@@ -839,12 +856,23 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
                 nFail += 1                
                 continue
 
+            fobj = Path(fname)
+            if ASK_QUESTIONS and fobj.is_file():
+                # Source file exists, overwrite?
+                if not(_yesno(f"File `{fname}` already exists - overwrite", doDeleteLn=True)):
+                    # Skip file
+                    print(f"File `{fname}` skipped by user.")
+                    nSkipped += 1
+                    continue
+
             # Do transfer ...        
             res = _xmodemReceive(fname, folder_local)
             nFail += 0 if res else 1    
 
     if nFail > 0:
-        print(f"Error : {nFail} of {len(_args.files)} transfers failed.")        
+        print(f"Error : {nFail} of {len(_args.files)} transfer(s) failed.")        
+    if nSkipped > 0:
+        print(f"{nSkipped} of {len(_args.files)} transfer(s) skipped by user.")        
 
     return (ErrCode.OK, "", [])
 
@@ -1002,8 +1030,9 @@ def _restore(_args :list, info :dict) -> tuple:
     # Everything is ready, ask user if to continue ...
     path_local_backup = path_local_abs_obj.__str__()
     print(f"Restoring backup `{path_local_backup}` to `{info['firmware']}` @`{_args.serial}` :")
-    if not(_yesno("Continue")):
-        return (ErrCode.USER_ABORT, "", [])        
+    if ASK_QUESTIONS:
+        if not(_yesno("Continue")):
+            return (ErrCode.USER_ABORT, "", [])        
 
     # Kill everything before backup?
     if _yesno(f"Kill everything on drive `{_args.drive}`"):
@@ -1054,7 +1083,7 @@ def _restore(_args :list, info :dict) -> tuple:
     pobj = path_local_abs_obj.joinpath(Path(fname_opt))
     if pobj.is_file():
         # Option file exists, restore as well?
-        if _yesno("Restore PicoMite options"):
+        if not(ASK_QUESTIONS) or _yesno("Restore PicoMite options"):
             print("  Reset options ...")
             cmd = 'option reset'
             log(f"Sending `{cmd}` ...")    
@@ -1077,7 +1106,7 @@ def _restore(_args :list, info :dict) -> tuple:
     # Check if library file with backup's name and restore, if requested
     fname_lib = stamp +FILE_EXT_LIB
     if checkFileExists(fname_lib) == ElementType.IS_FILE:
-        if _yesno(f"Restore library from `{fname_lib}`"):
+        if not(ASK_QUESTIONS) or _yesno(f"Restore library from `{fname_lib}`"):
             cmd = f'library disk load "{fname_lib}"'
             log(f"Sending `{cmd}` ...")    
             _ = sendCommand(cmd)
@@ -1111,6 +1140,7 @@ if __name__ == "__main__":
         XMODEM_WAIT_S = data["xmodem"]["xmodem_wait_s"]    
         XMODEM_PKG_SIZE = data["xmodem"]["xmodem_package_size_bytes"]    
         VERBOSE = data["debugging"]["verbose"]    
+        ASK_QUESTIONS = data["debugging"]["ask_questions"]    
 
     # Get command line arguments and pre-process them
     args = getCmdLineArgs()
