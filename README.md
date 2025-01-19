@@ -76,6 +76,9 @@ options:
 ```
 
 ## Release notes
+- v0.1.5
+  - Bug fixed in filetree representation
+  - Now user is asked if to proceed, if file that is transferred already exists
 - v0.1.4
   - Filetree command added
 - v0.1.3
