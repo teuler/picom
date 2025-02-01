@@ -11,5 +11,5 @@ xmodem_wait_s = 1.5
 xmodem_package_size_bytes = 128
 
 [debugging]
-verbose = 0
+verbose = 0pyin
 ask_questions = 1

@@ -24,7 +24,7 @@ from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.5 (beta)"
+PROG_VER       = "0.1.6 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -199,7 +199,10 @@ def sendCommand(_cmd :str, doPrint :bool =False, doDot :bool =False) -> list:
         REPL output as a list of strings; prints the reply, if `doPrint`
     """
     # Send command
+    '''
     cmd = _cmd.lower()
+    '''
+    cmd = _cmd
     SerIO.write(cmd +"\n")
     SerIO.flush() 
     if doDot:
@@ -227,7 +230,10 @@ def sendCommand(_cmd :str, doPrint :bool =False, doDot :bool =False) -> list:
             # Filter out lines starting with `>` and the first line (which
             # mirrors the command), and add the lines to a list
             res = res[:-1]
+            '''
             if len(res) > 0 and res[0] != ">" and res.lower() != cmd:
+            '''
+            if len(res) > 0 and res[0] != ">" and res != cmd:
                 repl.append(res)
 
     # Print output, if requested
@@ -568,7 +574,7 @@ def _xmodemSend(fname :str, _path_local :str ="") -> bool:
                 _ = sendCommand(cmd)
 
         # Prepare transfer ...
-        cmd = f'xmodem r "{fname}'
+        cmd = f'xmodem r "{fname}"'
         log(f'Send `{cmd}` ...')
         _ = sendCommand(cmd)
         time.sleep(XMODEM_WAIT_S)
@@ -623,7 +629,7 @@ def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
         return False   
     
     try:
-        cmd = f'xmodem s "{fname}'
+        cmd = f'xmodem s "{fname}"'
         log(f'Send `{cmd}` ...')
         _ = sendCommand(cmd)
         time.sleep(XMODEM_WAIT_S)
