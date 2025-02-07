@@ -11,7 +11,7 @@
 2) Activate environment and install requirements.    
    Under Windows:
    ```
-   .\picomenv_name\Scripts\activate
+   .\picom\Scripts\activate
    pip install pyserial
    pip install xmodem
    cd picom
