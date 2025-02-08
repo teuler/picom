@@ -204,7 +204,12 @@ def sendCommand(
     """
     # Send command
     cmd = _cmd
-    SerIO.write((cmd +"\n").encode())    
+    try:
+        SerIO.write((cmd +"\n").encode())    
+    except serial.serialutil.SerialTimeoutException as err:  
+        print(f"Error: {err}")
+        return []
+        
     time.sleep(doWait_ms /1_000)
     if doDot:
         print(".", end="")
