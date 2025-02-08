@@ -957,10 +957,7 @@ def _restore(_args :list, info :dict) -> tuple:
         ]
     else:
         print("Warning: Backup name does not contain time stamp.")    
-        print("  Options and library cannot be automatically restored.")    
-        if ASK_QUESTIONS:
-            if not(_yesno("Continue")):
-                return (ErrCode.USER_ABORT, "", [])     
+        print("  Note that therefore options and library cannot be automatically restored.")    
         ignore_list = []
         stamp = "unknown"
 
