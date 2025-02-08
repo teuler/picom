@@ -76,7 +76,7 @@ options:
 ```
 
 ## Trouble shooting
-- Windows: Note that if your file names contain `$` characters, you cannot use the powershell, because there variable names start with `$`. Use `cmd.exe` instead.
+- Note that if your file names contain `$` characters, you cannot use the Windows powershell, because there variable names start with `$`. Use `cmd.exe` instead. Same is true for (some?) Linux shells. In Linux, you can "escape" the `$` by using `\$`.
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
 
 ## Release notes
