@@ -1108,7 +1108,7 @@ if __name__ == "__main__":
     # If the list ports command is issued, do this directly
     if args.command in ["p", "ports"]:
         # List available serial ports and exit
-        ports = _listSerialPorts()
+        ports = _listSerialPorts(args)
         cleanUp(ErrCode.OK, noClose=True)
         sys.exit()
 
@@ -1128,7 +1128,7 @@ if __name__ == "__main__":
     if args.command in ["dummy"]:
         # Dummy to test new commands
         _reopenSerialIO()
-        
+
     elif args.command in ["ft", "filetree"]:
         # List complete filetree of given drive
         res = _filetree(args)
