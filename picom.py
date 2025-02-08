@@ -1063,9 +1063,8 @@ def _restore(_args :list, info :dict) -> tuple:
             
             time.sleep(1.5)
             _reopenSerialIO(_args)    
-            print(_args)
-            print(args)
             time.sleep(1.5)
+            _files(_args)
 
             print(f"  Restore options from `{fname_opt}` ...")
             cmd = f'option disk load "{fname_opt}"'
