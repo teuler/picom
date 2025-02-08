@@ -169,7 +169,7 @@ def _reopenSerialIO(_args :list):
     print("  Re-open serial port ...")
     time.sleep(0.5)
 
-    if platform.system().lower() == "linux"
+    if platform.system().lower() == "linux":
         # Under Linux, the COM port may change ...
         _dev = _listSerialPorts()
         nPico = 0
