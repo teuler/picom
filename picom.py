@@ -199,7 +199,6 @@ def _reopenSerialIO(_args :list):
         SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
 
 
-
 def _listSerialPorts(verbose :bool =True) -> list:
     """ Return list of serial ports that can be opened
     """
@@ -227,7 +226,7 @@ def cleanUp(errC :ErrCode, noClose :bool =False):
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 def sendCommand(
         _cmd :str, doPrint :bool =False, doDot :bool =False, 
-        doWait_ms :int = 10
+        doWait_ms :int = 100
     ) -> list:
     """ Sends a command via the serial port to the Pico and returns the 
         REPL output as a list of strings; prints the reply, if `doPrint`
