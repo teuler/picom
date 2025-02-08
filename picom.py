@@ -178,9 +178,8 @@ def _reopenSerialIO(_args :list):
             if "pico" in d[1].lower():
                 # Is Pico but is it the correct one?
                 _port = d[0]
-                SerIO = createSerialIO(_port, COM_BAUDRATE)
+                SerIO = createSerialIO(_port, COM_BAUDRATE, doCtrlC=False)
                 res = sendCommand("?MM.INFO(ID)")
-                print(res)
                 if len(res) > 0:
                     print(f"  Found Pico @ `{_port}` with ID `{res[0]}` ...")
                     success = res[0] == picoID
@@ -190,7 +189,6 @@ def _reopenSerialIO(_args :list):
                         _args.serial = d[0]
                         break
                 SerIO.close()
-                print("HERE")
 
         if not success:
             print("Error: Could not reconnect to Pico")           
