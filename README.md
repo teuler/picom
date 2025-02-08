@@ -77,11 +77,13 @@ options:
 
 ## Trouble shooting
 - Windows: Note that if your file names contain `$` characters, you cannot use the powershell, because there variable names start with `$`. Use `cmd.exe` instead.
+- To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
 
 ## Release notes
 - v0.1.7
   - Some changes to account for Python 3.13
   - With the newest firmware, saving a library on the PicoMite seems to take a bit more time. Therefore,  `sendCommand` has now an additional parameter that allows to wait between sending a command to the PicoMite and looking for the reply.
+  - Give a warning if the name of the backup does not contain a time stamp.
 - v0.1.6
   - Bug fixed when using file names with capital characters
 - v0.1.5
