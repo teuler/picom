@@ -166,12 +166,21 @@ def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
 def _reopenSerialIO(_args :list):
     global SerIO
     SerIO.close()
-    print(_listSerialPorts())
     print("  Re-open serial port ...")
-    time.sleep(1.5)
-    print(_listSerialPorts())
-    SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
-    print(_listSerialPorts())
+    time.sleep(0.5)
+
+    if platform.system().lower() == "linux"
+        # Under Linux, the COM port may change ...
+        _dev = _listSerialPorts()
+        nPico = 0
+        for d in _dev:
+            nPico += 1 if "pico" in d[1].lower() else 0
+        print(_dev, nPico)
+
+    else:
+        # With Windows, the COM port is usually the same ...
+        SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
+
 
 
 def _listSerialPorts(verbose :bool =False) -> list:
@@ -185,7 +194,7 @@ def _listSerialPorts(verbose :bool =False) -> list:
         print(f"{len(tmp)} serial port(s) found :")
         for p in tmp:
             print(f"  `{p.device}`, {p.description}")
-            ports.append(p.device)
+            ports.append([p.device, p.description])
     return ports
     
 
@@ -1108,7 +1117,7 @@ if __name__ == "__main__":
     # If the list ports command is issued, do this directly
     if args.command in ["p", "ports"]:
         # List available serial ports and exit
-        ports = _listSerialPorts(args)
+        _ = _listSerialPorts(args)
         cleanUp(ErrCode.OK, noClose=True)
         sys.exit()
 
@@ -1127,7 +1136,7 @@ if __name__ == "__main__":
     # Process command
     if args.command in ["dummy"]:
         # Dummy to test new commands
-        _reopenSerialIO()
+        _reopenSerialIO(args)
 
     elif args.command in ["ft", "filetree"]:
         # List complete filetree of given drive
