@@ -226,7 +226,7 @@ def cleanUp(errC :ErrCode, noClose :bool =False):
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 def sendCommand(
         _cmd :str, doPrint :bool =False, doDot :bool =False, 
-        doWait_ms :int = 100
+        doWait_ms :int = 10
     ) -> list:
     """ Sends a command via the serial port to the Pico and returns the 
         REPL output as a list of strings; prints the reply, if `doPrint`
@@ -1065,13 +1065,12 @@ def _restore(_args :list, info :dict) -> tuple:
             
             time.sleep(1.5)
             _reopenSerialIO(_args)    
-            print(_args)        
             time.sleep(1.5)
 
             print(f"  Restore options from `{fname_opt}` ...")
             cmd = f'option disk load "{fname_opt}"'
             log(f"Sending `{cmd}` ...")    
-            _ = sendCommand(cmd)
+            _ = sendCommand(cmd, doWait_ms=200)
 
             time.sleep(1.5)
             _reopenSerialIO(_args)            
