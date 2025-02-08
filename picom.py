@@ -948,16 +948,22 @@ def _restore(_args :list, info :dict) -> tuple:
     # Get date-time stamp, assuming it its the end of the backup name;
     # get also names of backup management files for excluding later from
     # the restore ... 
-    ignore_list = []
     tmp = _args.name.split("_")
-    stamp = "unknown"
     if len(tmp) > 1:
         stamp = tmp[1]
         ignore_list = [
             MASK_OPT_TXT.format(stamp).lower(),
             MASK_FTREE_TXT.format(stamp).lower()
         ]
-    
+    else:
+        print("Warning: Backup name does not contain time stamp.")    
+        print("  Options and library cannot be automatically restored.")    
+        if ASK_QUESTIONS:
+            if not(_yesno("Continue")):
+                return (ErrCode.USER_ABORT, "", [])     
+        ignore_list = []
+        stamp = "unknown"
+
     # Get filetree from local backup folder
     errC, msg, ftree = getFileTreeLocal(path_local_abs_obj.__str__())
     if errC != ErrCode.OK:
