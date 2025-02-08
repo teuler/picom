@@ -187,7 +187,10 @@ def _reopenSerialIO(_args :list):
                         # Pico identified by its ID
                         print("  Successfully reconnected.")
                         _args.serial = d[0]
+                        print(_args.serial)
                         break
+                SerIO.close()
+
         if not success:
             print("Error: Could not reconnect to Pico")           
             sys.exit() 
@@ -1063,7 +1066,8 @@ def _restore(_args :list, info :dict) -> tuple:
             _ = sendCommand(cmd)
             
             time.sleep(1.5)
-            _reopenSerialIO(_args)            
+            _reopenSerialIO(_args)    
+            print(_args)        
             time.sleep(1.5)
 
             print(f"  Restore options from `{fname_opt}` ...")
