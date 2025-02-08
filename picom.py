@@ -166,9 +166,12 @@ def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
 def _reopenSerialIO(_args :list):
     global SerIO
     SerIO.close()
+    print(_listSerialPorts())
     print("  Re-open serial port ...")
-    time.sleep(0.5)
+    time.sleep(1.5)
+    print(_listSerialPorts())
     SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
+    print(_listSerialPorts())
 
 
 def _listSerialPorts(verbose :bool =False) -> list:
@@ -209,7 +212,7 @@ def sendCommand(
     except serial.serialutil.SerialTimeoutException as err:  
         print(f"Error: {err}")
         return []
-        
+
     time.sleep(doWait_ms /1_000)
     if doDot:
         print(".", end="")
