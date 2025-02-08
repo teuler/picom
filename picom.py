@@ -185,7 +185,7 @@ def _reopenSerialIO(_args :list):
                     success = res[0] == picoID
                     if success:
                         # Pico identified by its ID
-                        print("  Success!")
+                        print("  Successfully reconnected.")
                         _args.serial = d[0]
                         break
         if not success:
@@ -198,7 +198,7 @@ def _reopenSerialIO(_args :list):
 
 
 
-def _listSerialPorts(verbose :bool =False) -> list:
+def _listSerialPorts(verbose :bool =True) -> list:
     """ Return list of serial ports that can be opened
     """
     tmp = serial_p.comports()
@@ -206,7 +206,8 @@ def _listSerialPorts(verbose :bool =False) -> list:
     if len(tmp) == 0:
         print("Error: No serial ports found.")
     else:
-        print(f"{len(tmp)} serial port(s) found :")
+        if verbose:
+            print(f"{len(tmp)} serial port(s) found :")
         for p in tmp:
             print(f"  `{p.device}`, {p.description}")
             ports.append([p.device, p.description])
