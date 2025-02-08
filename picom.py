@@ -24,7 +24,7 @@ from pathlib import Path
 from xmodem import XMODEM
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.6 (beta)"
+PROG_VER       = "0.1.7 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -74,10 +74,10 @@ xmodem_post = ""
 xmodem_pkg_size = XMODEM_PKG_SIZE
 
 def _getc(size, timeout=1):
-    return Ser.read(size) or None
+    return SerIO.read(size) or None
 
 def _putc(data, timeout=1):
-    return Ser.write(data) 
+    return SerIO.write(data) 
 
 # ---------------------------------------------------------------------------
 # Definitions of command line arguments
@@ -149,25 +149,26 @@ def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
     """ Open and return a serial port instance
     """ 
     try:
-        # Open serial port and create TextIOWrapper
-        ser = serial.Serial(_port, baudrate=_baudrate, timeout=COM_TOUT_S)
-        serIO = io.TextIOWrapper(io.BufferedRWPair(ser, ser), newline=None)
+        # Open serial port
+        serIO = serial.Serial(_port, baudrate=_baudrate, timeout=COM_TOUT_S)
 
         # Send Ctrl-C to interrupt any running program
         if doCtrlC:
-            serIO.write(chr(0x03) +chr(0x43))            
+            serIO.write(0x03)
+            serIO.write(0x43)            
 
     except serial.serialutil.SerialException:
-        ser = serIO = None   
-    return ser, serIO
+        serIO = None   
+
+    return serIO
 
 
 def _reopenSerialIO(_args :list):
-    global Ser, SerIO
-    Ser.close()
+    global SerIO
+    SerIO.close()
     print("  Re-open serial port ...")
     time.sleep(0.5)
-    Ser, SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
+    SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
 
 
 def _listSerialPorts(verbose :bool =False) -> list:
@@ -189,56 +190,45 @@ def cleanUp(errC :ErrCode, noClose :bool =False):
     """ Close ports etc.
     """
     if not noClose:
-        Ser.close()
+        SerIO.close()
     if errC == ErrCode.OK:
         log("Done.") 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def sendCommand(_cmd :str, doPrint :bool =False, doDot :bool =False) -> list:
+def sendCommand(
+        _cmd :str, doPrint :bool =False, doDot :bool =False, 
+        doWait_ms :int = 10
+    ) -> list:
     """ Sends a command via the serial port to the Pico and returns the 
         REPL output as a list of strings; prints the reply, if `doPrint`
     """
     # Send command
-    '''
-    cmd = _cmd.lower()
-    '''
     cmd = _cmd
-    SerIO.write(cmd +"\n")
-    SerIO.flush() 
+    SerIO.write((cmd +"\n").encode())    
+    time.sleep(doWait_ms /1_000)
     if doDot:
         print(".", end="")
     
     # Retrieve output
     done = False
     repl = []
-    '''
-    #t = time.monotonic()
-    res = SerIO.read().split("\n")
-    #print("dt=", time.monotonic() -t) #, " res=", res)
-    for ln in res:
-        # Filter out lines starting with `>` and the first line (which
-        # mirrors the command), and add the lines to a list
-        if len(ln) > 0 and ln[0] != ">" and cmd not in ln.lower():
-            repl.append(ln)
-
-    '''
+    n = m = 0
     while not(done):
-        #t = time.monotonic()
         res = SerIO.readline()
-        #print("dt=", time.monotonic() -t, " res=", res)
+        res = res.decode()
         if not(done := len(res) == 0):
             # Filter out lines starting with `>` and the first line (which
             # mirrors the command), and add the lines to a list
-            res = res[:-1]
-            '''
-            if len(res) > 0 and res[0] != ">" and res.lower() != cmd:
-            '''
+            n += 1
+            res = res[:-2]
             if len(res) > 0 and res[0] != ">" and res != cmd:
                 repl.append(res)
+                m += 1
 
     # Print output, if requested
     if doPrint:
-        _print(repl)           
+        _print(repl)        
+
     return repl
 
 # ---------------------------------------------------------------------------
@@ -428,69 +418,6 @@ def getFileTree(drive :str, verbose :bool =True) -> list:
     print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
     return [ErrCode.OK, "", ftree]
 
-'''
-def getFileTree(drive :str, verbose :bool =True) -> list:
-    """ Returns the complete file tree on `drive` as a list of paths in the
-        form  `[errCode, msg, pathlist]`
-    """
-    def _getSubTree(drive :str, path :str) -> list:
-        ftree = []
-        dlist = []
-        cmd = f'files "{drive +path}"'
-        log(f"Sending `{cmd}` ...")
-        repl = sendCommand(cmd)    
-        for i, ln in enumerate(repl):
-            if i < 3 or i > len(repl) -2:
-                # Skip the first three lines with the drive, `.`, and `..`
-                # and last line
-                continue
-            
-            tmp = ln.split()
-            if len(tmp) == 2 and "DIR" in tmp[0]:
-                # Is folder
-                dir = path +tmp[1] +"/"
-                ftree.append([dir, ElementType.IS_FOLDER])
-                dlist.append(dir)
-
-            elif len(tmp) == 4:
-                # Is file
-                ftree.append([path +tmp[-1], ElementType.IS_FILE])
-
-            else:
-                print(f"Warning: Entry #{i} (`{ln}`) not recognized.")    
-        return ftree, dlist
-
-    # Check if drive ok
-    res = checkDrive(drive)
-    if res[0] is not ErrCode.OK:
-        return res
-    
-    # Initialise
-    print(f"Retrieving file tree from `{drive}` :")
-    ftree = []
-    drive += "/" if drive[-1] != "/" else ""
-    path = ""
-    dlist = []
-
-    # Generate tree
-    while True:
-        if verbose:
-            print(f"  Parsing `{drive +path}` ...")
-        fsubtree, dsublist = _getSubTree(drive, path)
-        ftree += fsubtree
-        dlist += dsublist
-        if len(dlist) == 0:
-            break
-        path = dlist.pop(0)
-
-    # Count folders and subfolders
-    ndir = 0
-    ntotal = len(ftree)
-    for ln in ftree:    
-        ndir += 1 if ln[1] is ElementType.IS_FOLDER else 0
-    print(f"{ntotal -ndir} file(s) and {ndir} folder(s) found.")
-    return [ErrCode.OK, "", ftree]
-'''    
 
 def getFileTreeLocal(path_local :str) -> list:
     """ Returns the complete local file tree in `path` as a list of paths 
@@ -938,7 +865,7 @@ def _backup(_args :list) -> tuple:
     print(f"  Save library, if exists, to `{fname_lib}` ...")    
     cmd = f'library disk save "{fname_lib}"'
     log(f"Sending `{cmd}` ...")    
-    repl = sendCommand(cmd)
+    repl = sendCommand(cmd, doWait_ms=200)
     if len(repl) > 0 and "error" in repl[0].lower():
         log("No library found")
 
@@ -1172,8 +1099,8 @@ if __name__ == "__main__":
         sys.exit()
 
     # Get serial port and check if PicoMite is responding
-    Ser, SerIO = createSerialIO(args.serial, COM_BAUDRATE)
-    if Ser is None:
+    SerIO = createSerialIO(args.serial, COM_BAUDRATE)
+    if SerIO is None:
         print(f"Error: Could not open port `{args.serial}`.")
         sys.exit()
 
