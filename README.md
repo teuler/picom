@@ -11,7 +11,7 @@
 2) Activate environment and install requirements.    
    Under Windows:
    ```
-   .\picomenv_name\Scripts\activate
+   .\picom\Scripts\activate
    pip install pyserial
    pip install xmodem
    cd picom
@@ -24,7 +24,7 @@
    cd picom
    ```
 ### As an `.exe` file (Windows)
-The archive `picom_v0_1_2_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
+The archive `picom_v0_1_7_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
    
 ## Configuration `picom.toml`
 This file contains some basic settings, such as the preferred serial port and the baudrate.
@@ -36,7 +36,7 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 ## Usage
 Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
-PicoM v0.1.6 (beta)
+PicoM v0.1.7 (beta)
 usage: PicoM v0.1.6 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
 
 A file synchronisation tool for PicoMite.
@@ -75,7 +75,13 @@ options:
   -n NAME, --name NAME  Name of backup to generate or restore
 ```
 
+## Trouble shooting
+- Windows: Note that if your file names contain `$` characters, you cannot use the powershell, because there variable names start with `$`. Use `cmd.exe` instead.
+
 ## Release notes
+- v0.1.7
+  - Some changes to account for Python 3.13
+  - With the newest firmware, saving a library on the PicoMite seems to take a bit more time. Therefore,  `sendCommand` has now an additional parameter that allows to wait between sending a command to the PicoMite and looking for the reply.
 - v0.1.6
   - Bug fixed when using file names with capital characters
 - v0.1.5
