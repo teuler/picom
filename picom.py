@@ -948,12 +948,15 @@ def _restore(_args :list, info :dict) -> tuple:
     # Get date-time stamp, assuming it its the end of the backup name;
     # get also names of backup management files for excluding later from
     # the restore ... 
-    stamp = _args.name.split("_")[1]
-    assert len(stamp) > 0
-    ignore_list = [
-        MASK_OPT_TXT.format(stamp).lower(),
-        MASK_FTREE_TXT.format(stamp).lower()
-    ]
+    ignore_list = []
+    tmp = _args.name.split("_")
+    stamp = "unknown"
+    if len(tmp) > 1:
+        stamp = tmp[1]
+        ignore_list = [
+            MASK_OPT_TXT.format(stamp).lower(),
+            MASK_FTREE_TXT.format(stamp).lower()
+        ]
     
     # Get filetree from local backup folder
     errC, msg, ftree = getFileTreeLocal(path_local_abs_obj.__str__())
