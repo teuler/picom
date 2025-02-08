@@ -180,6 +180,7 @@ def _reopenSerialIO(_args :list):
                 _port = d[0]
                 SerIO = createSerialIO(_port, COM_BAUDRATE)
                 res = sendCommand("?MM.INFO(ID)")
+                print(res)
                 if len(res) > 0:
                     print(f"  Found Pico @ `{_port}` with ID `{res[0]}` ...")
                     success = res[0] == picoID
@@ -187,9 +188,9 @@ def _reopenSerialIO(_args :list):
                         # Pico identified by its ID
                         print("  Successfully reconnected.")
                         _args.serial = d[0]
-                        print(_args.serial)
                         break
                 SerIO.close()
+                print("HERE")
 
         if not success:
             print("Error: Could not reconnect to Pico")           
