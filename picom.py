@@ -957,7 +957,7 @@ def _backup(_args :list) -> tuple:
 def _restore(_args :list, info :dict) -> tuple:
     """ Restore a backup of the given drive
     """
-    global xmodem_pre
+    global xmodem_pre, args
 
     # Check if drive on PicoMite is available and ready
     log("Check drive ...")
@@ -1026,8 +1026,6 @@ def _restore(_args :list, info :dict) -> tuple:
         # Get path relative to backup folder, this will be the path on the
         # Picomite
         pobj = Path(ln[0]).relative_to(path_local_abs_obj)
-        #pobj_local = Path(ln[0])
-        #path_backup = pobj_local.
         fname = pobj.__str__().replace("\\", "/")
 
         if ln[1] == ElementType.IS_FILE:
@@ -1065,6 +1063,8 @@ def _restore(_args :list, info :dict) -> tuple:
             
             time.sleep(1.5)
             _reopenSerialIO(_args)    
+            print(_args)
+            print(args)
             time.sleep(1.5)
 
             print(f"  Restore options from `{fname_opt}` ...")
@@ -1157,6 +1157,7 @@ if __name__ == "__main__":
     if args.command in ["dummy"]:
         # Dummy to test new commands
         _reopenSerialIO(args)
+        print(args)
         res = _files(args)
 
     elif args.command in ["ft", "filetree"]:
