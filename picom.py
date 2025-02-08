@@ -1095,7 +1095,7 @@ if __name__ == "__main__":
         args.files = []
     else:
         args.files = [s.strip() for s in args.files[0].split(",")]
-    print(args)
+    #print(args)
 
     # If the list ports command is issued, do this directly
     if args.command in ["p", "ports"]:
