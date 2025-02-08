@@ -172,7 +172,7 @@ def _reopenSerialIO(_args :list):
     if platform.system().lower() == "linux":
         # Under Linux, the COM port may change ...
         print(f"  Checking for Pico with ID `{picoID}` ...")
-        _dev = _listSerialPorts()
+        _dev = _listSerialPorts(verbose=False)
         success = False
         for d in _dev:
             if "pico" in d[1].lower():
