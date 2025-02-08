@@ -164,18 +164,33 @@ def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
 
 
 def _reopenSerialIO(_args :list):
-    global SerIO
+    global SerIO, picoID
     SerIO.close()
     print("  Re-open serial port ...")
     time.sleep(0.5)
 
     if platform.system().lower() == "linux":
         # Under Linux, the COM port may change ...
+        print(f"  Checking for Pico with ID `{picoID}` ...")
         _dev = _listSerialPorts()
-        nPico = 0
+        success = False
         for d in _dev:
-            nPico += 1 if "pico" in d[1].lower() else 0
-        print(_dev, nPico)
+            if "pico" in d[1].lower():
+                # Is Pico but is it the correct one?
+                _port = d[0]
+                SerIO = createSerialIO(_port, COM_BAUDRATE)
+                res = sendCommand("?MM.INFO(ID)")
+                if len(res) > 0:
+                    print(f"  Found Pico @ `{_port}` with ID `{res[0]}` ...")
+                    success = res[0] == picoID
+                    if success:
+                        # Pico identified by its ID
+                        print("  Success!")
+                        _args.serial = d[0]
+                        break
+        if not success:
+            print("Error: Could not reconnect to Pico")           
+            sys.exit() 
 
     else:
         # With Windows, the COM port is usually the same ...
@@ -290,13 +305,14 @@ def _yesno(question :str, doDeleteLn=False):
 # ---------------------------------------------------------------------------
 # Retrieving general information from the PicoMite
 # ---------------------------------------------------------------------------
-def isPicoMitePresent() -> bool:
-    """ Check if PicoMite is responding
+def isPicoMitePresent() -> str:
+    """ Check if PicoMite is responding, returns "" if not, else returns
+        the unique ID
     """
     log(f"Checking for PicoMite ... ", noLF=True)
     res = sendCommand("?MM.INFO(ID)")
     log("done.", noHeader=True)
-    return len(res[0]) > 0
+    return res[0] if len(res[0]) > 0 else ""
 
 
 def getPicoMite() -> dict:
@@ -1127,12 +1143,13 @@ if __name__ == "__main__":
         print(f"Error: Could not open port `{args.serial}`.")
         sys.exit()
 
-    isConnected = isPicoMitePresent()
+    picoID = isPicoMitePresent()
+    isConnected = len(picoID) > 0
     if not isConnected:
         print(f"Error: No PicoMite at `{args.serial}`.")
         cleanUp(ErrCode.NO_PICO_FOUND)
         sys.exit()
-    
+
     # Process command
     if args.command in ["dummy"]:
         # Dummy to test new commands
