@@ -957,7 +957,7 @@ def _restore(_args :list, info :dict) -> tuple:
         ]
     else:
         print("Warning: Backup name does not contain time stamp.")    
-        print("  Note that therefore options and library cannot be automatically restored.")    
+        print("  Note that options and library cannot be automatically restored.")    
         ignore_list = []
         stamp = "unknown"
 
@@ -1095,7 +1095,7 @@ if __name__ == "__main__":
         args.files = []
     else:
         args.files = [s.strip() for s in args.files[0].split(",")]
-    #print(args)
+    print(args)
 
     # If the list ports command is issued, do this directly
     if args.command in ["p", "ports"]:
