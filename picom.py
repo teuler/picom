@@ -1125,7 +1125,11 @@ if __name__ == "__main__":
         sys.exit()
     
     # Process command
-    if args.command in ["ft", "filetree"]:
+    if args.command in ["dummy"]:
+        # Dummy to test new commands
+        _reopenSerialIO()
+        
+    elif args.command in ["ft", "filetree"]:
         # List complete filetree of given drive
         res = _filetree(args)
 
