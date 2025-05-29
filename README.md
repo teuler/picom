@@ -26,7 +26,7 @@
    cd picom
    ```
 ### As an `.exe` file (Windows)
-The archive `picom_v0_1_7_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
+The archive `picom_v0_1_8_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
    
 ## Configuration `picom.toml`
 This file contains some basic settings, such as the preferred serial port and the baudrate.
