@@ -85,7 +85,7 @@ options:
 ## Release notes
 - v0.1.8
   - Fixed a bug when using B: drive
-  - Added `-t` option (experimental), which kills the terminal program defined in the `.toml` file on command start and tries to restart that terminal program when the command is finished. Needs a full path to the program in `.toml`. 
+  - Added `-t` option (experimental), which kills the terminal program defined in `picom.toml` on command start and tries to restart that terminal program when the command is finished. Needs a full path to the program in `picom.toml`. 
 - v0.1.7
   - Some changes to account for Python 3.13
   - With the newest firmware, saving a library on the PicoMite seems to take a bit more time. Therefore,  `sendCommand` has now an additional parameter that allows to wait between sending a command to the PicoMite and looking for the reply.
