@@ -75,6 +75,7 @@ options:
   -f FILES, --files FILES
                         Comma-separated list of file name(s)
   -n NAME, --name NAME  Name of backup to generate or restore
+  -t, --terminal        End terminal program if one is still running and restart it after the command
 ```
 
 ## Trouble shooting
@@ -82,6 +83,9 @@ options:
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
 
 ## Release notes
+- v0.1.8
+  - Fixed a bug when using B: drive
+  - Added `-t` option (experimental), which kills the terminal program defined in the `.toml` file on command start and tries to restart that terminal program when the command is finished. Needs a full path to the program in `.toml`. 
 - v0.1.7
   - Some changes to account for Python 3.13
   - With the newest firmware, saving a library on the PicoMite seems to take a bit more time. Therefore,  `sendCommand` has now an additional parameter that allows to wait between sending a command to the PicoMite and looking for the reply.
