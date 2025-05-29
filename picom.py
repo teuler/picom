@@ -8,9 +8,7 @@
 # The MIT License (MIT)
 # Copyright (c) 2025 Thomas Euler
 # ---------------------------------------------------------------------------
-import serial
-import io
-import os
+import serial # type: ignore
 import sys
 import time
 import textwrap
@@ -19,12 +17,13 @@ import tomllib
 import logging
 import datetime
 import platform
-import serial.tools.list_ports as serial_p
+import subprocess
+import serial.tools.list_ports as serial_p # type: ignore
 from pathlib import Path
-from xmodem import XMODEM
+from xmodem import XMODEM # type: ignore
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.7 (beta)"
+PROG_VER       = "0.1.8 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -45,20 +44,24 @@ XMODEM_PKG_SIZE = 128
 VERBOSE         = False
 ASK_QUESTIONS   = True
 
+TERMINAL_PATH   = ""
+ 
 # ---------------------------------------------------------------------------
 class ErrCode:
-    OK              = 0
-    USER_ABORT      = 1
-    INVALID_DRIVE   = 10
-    DRIVE_NOT_READY = 11
-    B_NOT_ENABLED   = 12
-    INVALID_PATH    = 13
-    FOLDER_EXISTS   = 14
-    FOLDER_MISSING  = 15
-    INVALID_CMD     = 20
-    PARAM_MISSING   = 21
-    NO_PICO_FOUND   = 30
-    # ...
+    OK                = 0
+    USER_ABORT        = 1
+    INVALID_DRIVE     = 10
+    DRIVE_NOT_READY   = 11
+    B_NOT_ENABLED     = 12
+    INVALID_PATH      = 13
+    FOLDER_EXISTS     = 14
+    FOLDER_MISSING    = 15
+    FILE_NOT_FOUND    = 16
+    INVALID_CMD       = 20
+    PARAM_MISSING     = 21
+    NO_PICO_FOUND     = 30
+    EXT_PROG_ERROR    = 40
+    SUBPROCESS_FAILED = 41
 
 class ElementType:
     IS_FILE         = 1
@@ -138,6 +141,11 @@ def getCmdLineArgs() -> list:
         "-n", "--name", 
         nargs=1, default="",  
         help="Name of backup to generate or restore"
+    )     
+    _parser.add_argument(
+        "-t", "--terminal", 
+        action="store_true",  
+        help="End terminal program if one is still running and restart it after the command"
     )     
     log("done.", noHeader=True)
     return _parser.parse_args()
@@ -311,7 +319,7 @@ def isPicoMitePresent() -> str:
     """ Check if PicoMite is responding, returns "" if not, else returns
         the unique ID
     """
-    log(f"Checking for PicoMite ... ", noLF=True)
+    log("Checking for PicoMite ... ", noLF=True)
     res = sendCommand("?MM.INFO(ID)")
     log("done.", noHeader=True)
     return res[0] if len(res[0]) > 0 else ""
@@ -406,7 +414,7 @@ def getFileTree(drive :str, verbose :bool =True) -> list:
         log(f"Sending `{cmd}` ...")
         repl = sendCommand(cmd)    
         for i, ln in enumerate(repl):
-            if i < 3 or i > len(repl) -2:
+            if (i < 3 and drive[0].upper() == "A")or i > len(repl) -2:
                 # Skip the first three lines with the drive, `.`, and `..`
                 # and last line
                 continue
@@ -739,13 +747,6 @@ def _filetree(_args :list) -> tuple:
         else:
             print("?")    
 
-        last_flev = flev
-    '''
-    "├"
-    "─"
-    "└"
-    '''    
-
     return (ErrCode.OK, "", [])
 
 
@@ -1015,7 +1016,7 @@ def _restore(_args :list, info :dict) -> tuple:
             print(f"  Formatting drive `{_args.drive}` ... ")
             cmd = f'drive "{_args.drive}/FORMAT"'
             log(f"Sending `{cmd}` ...")    
-            repl = sendCommand(cmd)
+            _ = sendCommand(cmd)
             time.sleep(1.5)
 
     # Restore ...
@@ -1047,7 +1048,7 @@ def _restore(_args :list, info :dict) -> tuple:
                     log(f'Send `{cmd}` ...')
                     _ = sendCommand(cmd)
         else:
-            print(f"Error: Unknown element")                     
+            print("Error: Unknown element")                     
             nFail += 1
 
     # Restore PicoMite options, if stored and requested
@@ -1095,6 +1096,59 @@ def _restore(_args :list, info :dict) -> tuple:
     return (ErrCode.OK, "", [])
 
 # ---------------------------------------------------------------------------
+def launch_terminal(port: str) -> list:
+    """ Launch TeraTerm for the given port, returns error code etc.
+    """
+    try:
+        log(f"Launching `{TERMINAL_PATH}` ...")    
+        port_num = port.upper().split("M")[1]
+        args = [TERMINAL_PATH, f"/C={port_num}"]
+        subprocess.Popen(args)
+        return (ErrCode.OK, "", [])
+    
+    except subprocess.SubprocessError as e:
+        return (ErrCode.SUBPROCESS_FAILED, f"{e}", [])        
+    
+    except FileNotFoundError:
+        return (ErrCode.FILE_NOT_FOUND, f"{TERMINAL_PATH}", [])        
+
+
+def kill_terminal() -> bool:
+    """ Check if termial process is running and kill it if found.
+        Returns True if process was killed, False if not found
+    """
+    import psutil
+    
+    process_name = TERMINAL_PATH.split("\\")[-1].lower()
+    for proc in psutil.process_iter(['name']):
+        try:
+            if proc.info['name'].lower() == process_name:
+                proc.kill()
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return False
+
+# ---------------------------------------------------------------------------
+def handle_error(res :list):
+    """ Handle error messages, if any
+    """
+    if res[0] == ErrCode.USER_ABORT:
+        print("Aborted by user")
+    elif res[0] == ErrCode.INVALID_DRIVE:            
+        print(f"Error: Invalid drive parameter (`{res[1]}`)")
+    elif res[0] == ErrCode.INVALID_PATH:
+        print(f"Error: Invalid path (`{res[1]}`)") 
+    elif res[0] == ErrCode.INVALID_CMD:
+        print(f"Error: Command `{args.command}` not recognized")    
+    elif res[0] == ErrCode.SUBPROCESS_FAILED:
+        print(f"Error: Launching subprocess failed with `{res[1]}`")    
+    elif res[0] == ErrCode.FILE_NOT_FOUND:
+        print(f"Error: Could not find `{res[1]}`")    
+    elif res[0] != ErrCode.OK:            
+        print(f"Error: `{res[1]}`")
+
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
   
     # Print version
@@ -1112,7 +1166,8 @@ if __name__ == "__main__":
         XMODEM_WAIT_S = data["xmodem"]["xmodem_wait_s"]    
         XMODEM_PKG_SIZE = data["xmodem"]["xmodem_package_size_bytes"]    
         VERBOSE = data["debugging"]["verbose"]    
-        ASK_QUESTIONS = data["debugging"]["ask_questions"]    
+        ASK_QUESTIONS = data["debugging"]["ask_questions"]  
+        TERMINAL_PATH = data["terminal"]["terminal_path"]  
 
     # Get command line arguments and pre-process them
     args = getCmdLineArgs()
@@ -1137,6 +1192,12 @@ if __name__ == "__main__":
         cleanUp(ErrCode.OK, noClose=True)
         sys.exit()
 
+    if args.terminal:
+        # Kill previous terminal, if found
+        print("Trying to kill open terminal ...")
+        kill_terminal()    
+        time.sleep(2)
+
     # Get serial port and check if PicoMite is responding
     SerIO = createSerialIO(args.serial, COM_BAUDRATE)
     if SerIO is None:
@@ -1152,13 +1213,14 @@ if __name__ == "__main__":
 
 
     # Process command
+    '''
     if args.command in ["dummy"]:
         # Dummy to test new commands
-        _reopenSerialIO(args)
-        print(args)
-        res = _files(args)
-
-    elif args.command in ["ft", "filetree"]:
+        res = launch_terminal(args.serial)
+ 
+    el
+    '''
+    if args.command in ["ft", "filetree"]:
         # List complete filetree of given drive
         res = _filetree(args)
 
@@ -1196,6 +1258,7 @@ if __name__ == "__main__":
         info = getPicoMite()
         print(f"  Firmware      : {info['firmware']} @`{args.serial}`")
         print(f"  Chip          : {info['chip']}")
+        print(f"  ID            : {info['ID']}")
         print(f"  MMBasic       : {info['version']}")
         print(f"  CPU frequency : {round(info['cpu_speed'] /1E6)} MHz")
         print(f"  Current drive : {info['drive']}")
@@ -1210,16 +1273,13 @@ if __name__ == "__main__":
         res = [ErrCode.INVALID_CMD]
 
     # Handle error messages, if any
-    if res[0] == ErrCode.USER_ABORT:
-        print("Aborted by user")
-    elif res[0] == ErrCode.INVALID_DRIVE:            
-        print(f"Error: Invalid drive parameter (`{res[1]}`)")
-    elif res[0] == ErrCode.INVALID_PATH:
-        print(f"Error: Invalid path (`{res[1]}`)") 
-    elif res[0] == ErrCode.INVALID_CMD:
-        print(f"Error: Command `{args.command}` not recognized")    
-    elif res[0] != ErrCode.OK:            
-        print(f"Error: `{res[1]}`")
+    handle_error(res)
+
+    # Run terminal program, if requested
+    if args.terminal:
+        print("Trying to launch terminal programm ...")
+        res = launch_terminal(args.serial)
+        handle_error(res)    
 
     # Clean up
     cleanUp(res[0])
