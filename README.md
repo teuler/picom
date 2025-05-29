@@ -14,6 +14,7 @@
    .\picom\Scripts\activate
    pip install pyserial
    pip install xmodem
+   pip install psutil
    cd picom
    ```
    Under Linux:
@@ -21,6 +22,7 @@
    source picom/bin/activate
    pip install pyserial
    pip install xmodem
+   pip install psutil
    cd picom
    ```
 ### As an `.exe` file (Windows)
