@@ -3,7 +3,7 @@ title = "TOML for PicoM"
 [serial]
 com_port = "COM4"
 com_baudrate = 921600
-com_timeout_s = 0.2
+com_timeout_s = 0.5
 
 [xmodem]
 xmodem_retry = 8

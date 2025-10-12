@@ -23,7 +23,7 @@ from pathlib import Path
 from xmodem import XMODEM # type: ignore
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.8 (beta)"
+PROG_VER       = "0.1.9 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -204,7 +204,10 @@ def _reopenSerialIO(_args :list):
 
     else:
         # With Windows, the COM port is usually the same ...
-        SerIO = createSerialIO(_args.serial, COM_BAUDRATE)
+        SerIO = createSerialIO(_args.serial, COM_BAUDRATE, doCtrlC=False)
+        '''
+        print("SerIO", SerIO)
+        '''
 
 
 def _listSerialPorts(verbose :bool =True) -> list:
@@ -256,16 +259,20 @@ def sendCommand(
     repl = []
     n = m = 0
     while not(done):
-        res = SerIO.readline()
-        res = res.decode()
-        if not(done := len(res) == 0):
-            # Filter out lines starting with `>` and the first line (which
-            # mirrors the command), and add the lines to a list
-            n += 1
-            res = res[:-2]
-            if len(res) > 0 and res[0] != ">" and res != cmd:
-                repl.append(res)
-                m += 1
+        try:
+            res = SerIO.readline()
+            res = res.decode()
+            if not(done := len(res) == 0):
+                # Filter out lines starting with `>` and the first line (which
+                # mirrors the command), and add the lines to a list
+                n += 1
+                res = res[:-2]
+                if len(res) > 0 and res[0] != ">" and res != cmd:
+                    repl.append(res)
+                    m += 1
+        except serial.serialutil.SerialException:
+            print("_")
+            time.sleep(1)
 
     # Print output, if requested
     if doPrint:
@@ -333,10 +340,14 @@ def getPicoMite() -> dict:
     res = sendCommand("option list", doDot=True)
     if len(res) > 0:
         tmp = res[0].split()
+        if len(tmp) < 5:
+            v = tmp[3]
+        else:
+            v = tmp[4]    
         if "picomite" in tmp[0].lower():
             ver.update({
                 "firmware": tmp[0], 
-                "chip": tmp[2], "version": tmp[4]
+                "chip": tmp[2], "version": v
             })
     res = sendCommand("?MM.INFO$(CPUSPEED)", doDot=True)
     ver.update({"cpu_speed": int(res[-1])}) 
@@ -1061,19 +1072,17 @@ def _restore(_args :list, info :dict) -> tuple:
             cmd = 'option reset'
             log(f"Sending `{cmd}` ...")    
             _ = sendCommand(cmd)
-            
-            time.sleep(1.5)
+            time.sleep(2)
             _reopenSerialIO(_args)    
-            time.sleep(1.5)
+            time.sleep(2)
 
             print(f"  Restore options from `{fname_opt}` ...")
             cmd = f'option disk load "{fname_opt}"'
-            log(f"Sending `{cmd}` ...")    
-            _ = sendCommand(cmd, doWait_ms=1200)
-
-            time.sleep(1.5)
+            log(f"Sending `{cmd}` ...")   
+            _ = sendCommand(cmd) #, doWait_ms=4500)
+            time.sleep(2)
             _reopenSerialIO(_args)            
-            time.sleep(1.5)
+            time.sleep(2)
             print("done.")
 
     # Check if library file with backup's name and restore, if requested
