@@ -81,6 +81,7 @@ options:
 
 ## Issues
 - Restoring the options and/of libraries using `options disk load` and `library disk load`, respectively, fail with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
+- Restoring libraries using `library disk load` fails with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
 
 ## Trouble shooting
 - Note that if your file names contain `$` characters, you cannot use the Windows powershell, because there variable names start with `$`. Use `cmd.exe` instead. Same is true for (some?) Linux shells. In Linux, you can "escape" the `$` by using `\$`.
