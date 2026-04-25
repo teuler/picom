@@ -26,7 +26,7 @@
    cd picom
    ```
 ### As an `.exe` file (Windows)
-The archive `picom_v0_1_8_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
+The archive `picom_v0_1_11_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
    
 ## Configuration `picom.toml`
 This file contains some basic settings, such as the preferred serial port and the baudrate.
@@ -38,8 +38,8 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 ## Usage
 Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
-PicoM v0.1.8 (beta)
-usage: PicoM v0.1.8 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
+PicoM v0.1.11 (beta)
+usage: PicoM v0.1.11 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] [-t] [-y] command
 
 A file synchronisation tool for PicoMite.
 Note that the quotes are only required for multiple-word commands. All file
@@ -81,8 +81,12 @@ options:
 ## Trouble shooting
 - Note that if your file names contain `$` characters, you cannot use the Windows powershell, because there variable names start with `$`. Use `cmd.exe` instead. Same is true for (some?) Linux shells. In Linux, you can "escape" the `$` by using `\$`.
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
+- It seems tempting to watch what picom is doing on the picomite by using a second terminal connection via the console, but this does seem to interfer with the timing. So, if you see errors with picom and use an extra console connection, try picom without that. 
 
 ## Release notes
+- v0.1.10
+  - Some small bug fixes
+  - Started to implement YMODEM (beta) but have not yet found a good YMODEM implementation for Python ...  
 - v0.1.8
   - Fixed a bug when using B: drive
   - Added `-t` option (experimental), which kills the terminal program defined in `picom.toml` on command start and tries to restart that terminal program when the command is finished. Needs a full path to the program in `picom.toml`. 
