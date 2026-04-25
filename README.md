@@ -26,7 +26,7 @@
    cd picom
    ```
 ### As an `.exe` file (Windows)
-The archive `picom_v0_1_8_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
+The archive `picom_v0_1_11_Windows.zip` contains an `.exe` file of the Python program together with the necessary DLLs. Copy the `picom` folder to your drive and execute `picom` from within that folder.
    
 ## Configuration `picom.toml`
 This file contains some basic settings, such as the preferred serial port and the baudrate.
@@ -38,8 +38,8 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 ## Usage
 Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
-PicoM v0.1.10 (beta)
-usage: PicoM v0.1.10 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] [-t] [-y] command
+PicoM v0.1.11 (beta)
+usage: PicoM v0.1.11 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] [-t] [-y] command
 
 A file synchronisation tool for PicoMite.
 Note that the quotes are only required for multiple-word commands. All file
