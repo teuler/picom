@@ -38,8 +38,8 @@ At `com_baudrate = 115200`, the XMODEM wait time needs to be longer (`xmodem_wai
 ## Usage
 Enter `python picom.py -h` (or, in case of the executable `picom -h`) to get help:
 ```
-PicoM v0.1.8 (beta)
-usage: PicoM v0.1.8 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] command
+PicoM v0.1.10 (beta)
+usage: PicoM v0.1.10 (beta) [-h] [-s SERIAL] [-d DRIVE] [-p PATH] [-f FILES] [-n NAME] [-t] [-y] command
 
 A file synchronisation tool for PicoMite.
 Note that the quotes are only required for multiple-word commands. All file
@@ -83,6 +83,9 @@ options:
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
 
 ## Release notes
+- v0.1.10
+  - Some small bug fixes
+  - Started to implement YMODEM (beta) but have not yet found a good YMODEM implementation for Python ...  
 - v0.1.8
   - Fixed a bug when using B: drive
   - Added `-t` option (experimental), which kills the terminal program defined in `picom.toml` on command start and tries to restart that terminal program when the command is finished. Needs a full path to the program in `picom.toml`. 
