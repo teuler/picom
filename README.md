@@ -81,6 +81,7 @@ options:
 ## Trouble shooting
 - Note that if your file names contain `$` characters, you cannot use the Windows powershell, because there variable names start with `$`. Use `cmd.exe` instead. Same is true for (some?) Linux shells. In Linux, you can "escape" the `$` by using `\$`.
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
+- It seems tempting to watch what picom is doing on the picomite by using a second terminal connection via the console, but this does seem to interfer with the timing. So, if you see errors with picom and use an extra console connection, try picom without that. 
 
 ## Release notes
 - v0.1.10
