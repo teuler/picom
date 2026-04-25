@@ -6,7 +6,7 @@
 # For release notes, see https://github.com/teuler/picom/blob/main/README.md
 #
 # The MIT License (MIT)
-# Copyright (c) 2025 Thomas Euler
+# Copyright (c) 2025,2026 Thomas Euler
 # ---------------------------------------------------------------------------
 import serial # type: ignore
 import sys
@@ -24,7 +24,7 @@ from xmodem import XMODEM # type: ignore
 from ymodem.Socket import ModemSocket
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.10 (beta)"
+PROG_VER       = "0.1.11 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -36,15 +36,16 @@ FILE_EXT_LIB   = ".lib"
 #
 COM_PORT        = "COM5"
 COM_BAUDRATE    = 921_600
-COM_TOUT_S      = 0.2
+COM_TOUT_S      = 0.1
 
-XMODEM_RETRY    = 8
-XMODEM_WAIT_S   = 1.5
+XMODEM_RETRY    = 5
+XMODEM_WAIT_S   = 2.0
 XMODEM_PKG_SIZE = 128
 
 YMODEM_WAIT_S   = 0.2
 YMODEM_PKG_SIZE = 1024
 
+REOPEN_WAIT_S   = 10
 
 VERBOSE         = False
 ASK_QUESTIONS   = True
@@ -185,7 +186,7 @@ def createSerialIO(_port :str, _baudrate :int, doCtrlC=True) -> tuple:
 def _reopenSerialIO(_args :list):
     global SerIO, picoID
     SerIO.close()
-    print("  Re-open serial port ...")
+    print("  Re-open serial port ... (please be patient)")
     time.sleep(0.5)
 
     if platform.system().lower() == "linux":
@@ -1174,7 +1175,7 @@ def _restore(_args :list, info :dict, _useYModem :bool =False) -> tuple:
             nFail += 1
 
     # Restore PicoMite options, if stored and requested
-    fname_opt = stamp +FILE_EXT_OPT
+    fname_opt = stamp.strip("\\") +FILE_EXT_OPT
     pobj = path_local_abs_obj.joinpath(Path(fname_opt))
     if pobj.is_file():
         # Option file exists, restore as well?
@@ -1183,7 +1184,7 @@ def _restore(_args :list, info :dict, _useYModem :bool =False) -> tuple:
             cmd = 'option reset'
             log(f"Sending `{cmd}` ...")    
             _ = sendCommand(cmd)
-            time.sleep(2)
+            time.sleep(REOPEN_WAIT_S)
             _reopenSerialIO(_args)    
             time.sleep(2)
 
@@ -1191,13 +1192,13 @@ def _restore(_args :list, info :dict, _useYModem :bool =False) -> tuple:
             cmd = f'option disk load "{fname_opt}"'
             log(f"Sending `{cmd}` ...")   
             _ = sendCommand(cmd) #, doWait_ms=4500)
-            time.sleep(2)
+            time.sleep(REOPEN_WAIT_S)
             _reopenSerialIO(_args)            
             time.sleep(2)
             print("done.")
 
     # Check if library file with backup's name and restore, if requested
-    fname_lib = stamp +FILE_EXT_LIB
+    fname_lib = stamp.strip("\\") +FILE_EXT_LIB
     if checkFileExists(fname_lib) == ElementType.IS_FILE:
         if not(ASK_QUESTIONS) or _yesno(f"Restore library from `{fname_lib}`"):
             cmd = f'library disk load "{fname_lib}"'
