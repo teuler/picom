@@ -23,6 +23,7 @@
    pip install pyserial
    pip install xmodem
    pip install psutil
+   pip install ymodem
    cd picom
    ```
 ### As an `.exe` file (Windows)
@@ -78,13 +79,17 @@ options:
   -t, --terminal        End terminal program if one is still running and restart it after the command
 ```
 
+## Issues
+- Restoring the options and/of libraries using `options disk load` and `library disk load`, respectively, fail with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
+- Restoring libraries using `library disk load` fails with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
+
 ## Trouble shooting
 - Note that if your file names contain `$` characters, you cannot use the Windows powershell, because there variable names start with `$`. Use `cmd.exe` instead. Same is true for (some?) Linux shells. In Linux, you can "escape" the `$` by using `\$`.
 - To restore a backup, use the name (folder name) that `picom` generated - don't change the name, because `picom` uses the timestamp (separated by `_`) to manage its files and to restore options and libraries.
 - It seems tempting to watch what picom is doing on the picomite by using a second terminal connection via the console, but this does seem to interfer with the timing. So, if you see errors with picom and use an extra console connection, try picom without that. 
 
 ## Release notes
-- v0.1.10
+- v0.1.11
   - Some small bug fixes
   - Started to implement YMODEM (beta) but have not yet found a good YMODEM implementation for Python ...  
 - v0.1.8
