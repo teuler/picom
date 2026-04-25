@@ -21,9 +21,10 @@ import subprocess
 import serial.tools.list_ports as serial_p # type: ignore
 from pathlib import Path
 from xmodem import XMODEM # type: ignore
+from ymodem.Socket import ModemSocket
 
 PROG_NAME      = "PicoM"
-PROG_VER       = "0.1.9 (beta)"
+PROG_VER       = "0.1.10 (beta)"
 
 MASK_OPT_TXT   = "{0}_options.txt"
 MASK_FTREE_TXT = "{0}_filetree.txt"
@@ -40,6 +41,10 @@ COM_TOUT_S      = 0.2
 XMODEM_RETRY    = 8
 XMODEM_WAIT_S   = 1.5
 XMODEM_PKG_SIZE = 128
+
+YMODEM_WAIT_S   = 0.2
+YMODEM_PKG_SIZE = 1024
+
 
 VERBOSE         = False
 ASK_QUESTIONS   = True
@@ -105,9 +110,10 @@ def getCmdLineArgs() -> list:
                                  (considers options `-d`, `-p`)   
               ft, "filetree"     List all files                 
                                  (considers option `-d`)         
-              xs, "xmodem s"     Send file(s) to PicoMite
+              xs, "xmodem s"     Send file(s) to PicoMite using XMODEM or YMODEM 
+                                 if `-y` is set.
                                  (requires option `-f`, considers `-d`, `-p`)   
-              xr, "xmodem r"     Retrieve file(s) from Picomite
+              xr, "xmodem r"     Retrieve file(s) from Picomite using XMODEM
                                  (requires option `-f`, considers `-d`, `-p`)   
               b, "backup"        Create complete backup of the PicoMite's given drive
                                  (requires option `-n`, considers `-d`)   
@@ -146,6 +152,11 @@ def getCmdLineArgs() -> list:
         "-t", "--terminal", 
         action="store_true",  
         help="End terminal program if one is still running and restart it after the command"
+    )     
+    _parser.add_argument(
+        "-y", "--ymodem", 
+        action="store_true",  
+        help="Use YMODEM instead of XMODEM for all file transfers"
     )     
     log("done.", noHeader=True)
     return _parser.parse_args()
@@ -243,6 +254,9 @@ def sendCommand(
         REPL output as a list of strings; prints the reply, if `doPrint`
     """
     # Send command
+    '''
+    print("cmd=", _cmd)
+    '''
     cmd = _cmd
     try:
         SerIO.write((cmd +"\n").encode())    
@@ -261,6 +275,9 @@ def sendCommand(
     while not(done):
         try:
             res = SerIO.readline()
+            '''
+            print("res=", res)
+            '''
             res = res.decode()
             if not(done := len(res) == 0):
                 # Filter out lines starting with `>` and the first line (which
@@ -383,8 +400,10 @@ def checkDrive(_drive: str, doChange :bool =True) -> tuple:
 def checkFileExists(fname :str) -> ElementType:
     """ Returns True if file exists
     """
-    repl = sendCommand(f'?MM.INFO(EXISTS FILE "{fname}")')
-    assert len(repl) > 0
+    repl = sendCommand(f'?MM.INFO(EXISTS FILE "{fname}")', doWait_ms=1500)
+    if len(repl) == 0:
+        log(f"Internal error in `checkFileExists(`{fname}`)` : no response")
+        return ElementType.IS_NONE
     try:
         if int(repl[-1].strip()) == 1:
             return ElementType.IS_FILE
@@ -403,7 +422,7 @@ def getFileSize(fname :str) -> int:
     """
     if checkFileExists(fname) != ElementType.IS_FILE:
         return -1
-    repl = sendCommand(f'?MM.INFO(FILESIZE "{fname}")')
+    repl = sendCommand(f'?MM.INFO(FILESIZE "{fname}")', doWait_ms=1000)
     return int(repl[-1])
  
 
@@ -516,7 +535,7 @@ def getFileTreeLocal(path_local :str) -> list:
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 def _xmodemSend(fname :str, _path_local :str ="") -> bool:
-    """ Send local file `fname` to the PicoMite using XMODEM. Returns True
+    """ Send local file `fname` to the PicoMite using XMODEM. Returns True 
         if transfer complete
     """            
     global xmodem_n_pkgs, xmodem_post    
@@ -524,10 +543,6 @@ def _xmodemSend(fname :str, _path_local :str ="") -> bool:
     # Extend path, if `path_local` is defined
     path_local = getAbsLocalPath(_path_local)
     fname_local = Path(path_local).joinpath(Path(fname))
-    '''
-    print("fname_local", fname_local)
-    print("fname", fname)
-    '''
 
     # Calculate number of packages
     fsize = Path(fname_local).stat().st_size
@@ -555,9 +570,9 @@ def _xmodemSend(fname :str, _path_local :str ="") -> bool:
                 _ = sendCommand(cmd)
 
         # Prepare transfer ...
-        cmd = f'xmodem r "{fname}"'
-        log(f'Send `{cmd}` ...')
+        cmd = f'xmodem receive "{fname}"'
         _ = sendCommand(cmd)
+        log(f'Send `{cmd}` ...')
         time.sleep(XMODEM_WAIT_S)
 
         # Start transfer
@@ -569,6 +584,7 @@ def _xmodemSend(fname :str, _path_local :str ="") -> bool:
             retry=XMODEM_RETRY, quiet=0, 
             callback=_progressSend
         )
+
     finally:
         modem = None
         stream.close()
@@ -584,7 +600,7 @@ def _xmodemSend(fname :str, _path_local :str ="") -> bool:
 
 
 def _xmodemReceive(fname :str, path_local :str ="") -> ErrCode:
-    """ Receive file `fname` on PicoMite using XMODEM. Returns True if
+    """ Receive file `fname` on PicoMite using XMODEM. Returns True if 
         transfer complete       
     """    
     global xmodem_n_pkgs, xmodem_post    
@@ -653,7 +669,9 @@ def _wait_xmodem(n_curr :int, wait_s :float):
         )
 
 
-def _progressSend(total_packets :int, success_count :int, error_count :int):
+def _progressSend(
+        total_packets :int, success_count :int, error_count :int
+    ):
     """ Callback for XMODEM send function
     """
     global xmodem_n_pkgs, xmodem_post
@@ -667,7 +685,10 @@ def _progressSend(total_packets :int, success_count :int, error_count :int):
         xmodem_n_pkgs = 0
 
 
-def _progressRecv(total_packets :int, success_count :int, error_count :int, packet_size: int):
+def _progressRecv(
+        total_packets :int, success_count :int, error_count :int, 
+        packet_size: int
+    ):
     """ Callback for XMODEM recv function
     """
     global xmodem_n_pkgs, xmodem_post, xmodem_pkg_size
@@ -681,6 +702,80 @@ def _progressRecv(total_packets :int, success_count :int, error_count :int, pack
     if success_count == xmodem_n_pkgs:
         xmodem_n_pkgs = 0
     
+# ---------------------------------------------------------------------------
+def _ymodemSend(fname :str, _path_local :str ="") -> bool:
+    """ Send local file `fname` to the PicoMite using YMODEM. Returns True 
+        if transfer complete
+    """            
+    global xmodem_n_pkgs, xmodem_post    
+
+    # Extend path, if `path_local` is defined
+    path_local = getAbsLocalPath(_path_local)
+    fname_local = Path(path_local).joinpath(Path(fname))
+
+    # Calculate number of packages
+    fsize = Path(fname_local).stat().st_size
+    n_pkgs = round(fsize /YMODEM_PKG_SIZE)
+    xmodem_n_pkgs = n_pkgs
+    log(f"`{fname}` : Size: {fsize} bytes (= {xmodem_n_pkgs} packages)")
+
+    # TODO Check if `fname_local` exists
+    try:
+        stream = open(fname_local, "rb")
+        stream.close()
+    except FileNotFoundError:
+        print(f"Error: file `{fname_local.__str__()}` cannot be opened for reading.")
+        return False   
+    
+    try:    
+        # Check if `fname` contains folders and if so, if the folders
+        # exist on the PicoMite
+        tmp = fname.rsplit("/", 1)
+        if len(tmp) > 1:
+            if not checkFileExists(tmp[0]) == ElementType.IS_FOLDER:
+                # Create folder
+                log(f"Create folder `{tmp[0]}` ...")
+                cmd = f'mkdir "{tmp[0]}"'
+                log(f'Send `{cmd}` ...')
+                _ = sendCommand(cmd)
+
+        # Prepare transfer ...
+        cmd = f'ymodem receive "{fname}"'
+        _ = sendCommand(cmd)
+        log(f'Send `{cmd}` ...')
+        time.sleep(YMODEM_WAIT_S)
+
+        # Start transfer
+        '''
+        modem = XMODEM(_getc, _putc)
+        modem.log.setLevel(logging.CRITICAL)
+        xmodem_post = f"`{fname}`"
+        _ = modem.send(
+            stream, 
+            retry=XMODEM_RETRY, quiet=0, 
+            callback=_progressSend
+        )
+        '''
+        # ['UNIX_RZ_SZ', 'VMS_RB_SB', 'PRO_YAM', 'CP_M_YAM', 'KMD_IMP']
+        modem = ModemSocket(_getc, _putc, style_id="VMS_RB_SB")    
+        xmodem_post = f"`{fname}`"
+        _ = modem.send(
+            [fname_local],
+            callback=_progressSend
+        )
+
+    finally:
+        modem = None
+
+    # Give PicoMite time to finish transfer ...
+    _wait_xmodem(n_pkgs, XMODEM_WAIT_S)    
+        
+    # Check if transferred file has the correct size
+    fsize_pico = getFileSize(fname)
+    print(" - incomplete" if fsize_pico < fsize else " - complete", end="")
+    print(f" ({fsize_pico} of {fsize} bytes).")
+    return fsize_pico >= fsize
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -784,12 +879,16 @@ def _option_list() -> tuple:
     return (ErrCode.OK, "", repl)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
-    """ Send or receive a file or files via XModem
+def _modem(
+        _args :list, folder_local :str ="", doSend :bool =True,
+        _useYModem :bool =False
+    ) -> tuple:
+    """ Send or receive a file or files via XModem or YModem
     """
     global xmodem_pre 
     nFail = 0
     nSkipped = 0
+    sModem = "XMODEM" if not _useYModem else "YMODEM"
 
     if len(_args.files) == 0:
         print("No file name(s) defined, nothing to do.")
@@ -797,7 +896,7 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
 
     if doSend:
         # Send files
-        print("Transfering file(s) using XMODEM :")
+        print(f"Transfering file(s) using {sModem} :")
         xmodem_pre = "Transfer"
 
         for fname in _args.files:
@@ -818,13 +917,16 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
                     nSkipped += 1
                     continue
 
-            # Do transfer ...        
-            res = _xmodemSend(fname, folder_local)
+            # Do transfer ...       
+            if not _useYModem:
+                res = _xmodemSend(fname, folder_local)
+            else:    
+                res = _ymodemSend(fname, folder_local)
             nFail += 0 if res else 1    
 
     else:
         # Retrieve files
-        print("Receiving file(s) using XMODEM :")
+        print(f"Receiving file(s) using {sModem} :")
         xmodem_pre = "Retrieve"    
 
         for fname in _args.files:
@@ -846,7 +948,10 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
                     continue
 
             # Do transfer ...        
-            res = _xmodemReceive(fname, folder_local)
+            if not _useYModem:            
+                res = _xmodemReceive(fname, folder_local)
+            else:    
+                res = _ymodemReceive(fname, folder_local)
             nFail += 0 if res else 1    
 
     if nFail > 0:
@@ -857,7 +962,7 @@ def _xmodem(_args :list, folder_local :str ="", doSend=True) -> tuple:
     return (ErrCode.OK, "", [])
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def _backup(_args :list) -> tuple:
+def _backup(_args :list, _useYModem :bool =False) -> tuple:
     """ Create a backup of the given drive
     """
     global xmodem_pre
@@ -954,7 +1059,10 @@ def _backup(_args :list) -> tuple:
 
             # Do transfer ...        
             xmodem_pre = "Backup"     
-            res = _xmodemReceive(fname, path_local_abs_obj.__str__())
+            if not _useYModem:
+                res = _xmodemReceive(fname, path_local_abs_obj.__str__())
+            else:
+                res = _ymodemReceive(fname, path_local_abs_obj.__str__())    
             nFail += 0 if res else 1  
             nFiles += 1
 
@@ -966,7 +1074,7 @@ def _backup(_args :list) -> tuple:
     return (ErrCode.OK, "", [])
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-def _restore(_args :list, info :dict) -> tuple:
+def _restore(_args :list, info :dict, _useYModem :bool =False) -> tuple:
     """ Restore a backup of the given drive
     """
     global xmodem_pre, args
@@ -1045,7 +1153,10 @@ def _restore(_args :list, info :dict) -> tuple:
             if fname_only not in ignore_list:
                 # Restore file ...
                 xmodem_pre = "Restore"     
-                res = _xmodemSend(fname, _path_local=path_local_backup)
+                if not _useYModem:
+                    res = _xmodemSend(fname, _path_local=path_local_backup)
+                else:
+                    res = _ymodemSend(fname, _path_local=path_local_backup)                    
                 nFail += 0 if res else 1  
                 nFiles += 1                
             
@@ -1247,20 +1358,20 @@ if __name__ == "__main__":
         '''
     elif args.command in ["b", "backup"]:
         # Create a backup of connected PicoMite
-        res = _backup(args)
+        res = _backup(args, args.ymodem)
 
     elif args.command in ["r", "restore"]:
         # Restore a backup to the connected PicoMite
         info = getPicoMite()
-        res = _restore(args, info)
+        res = _restore(args, info, args.ymodem)
 
     elif args.command in ["xs", "xmodem s"]:
-        # Send file (or files) via XModem
-        res = _xmodem(args, doSend=True)
+        # Send file (or files) via XModem or YModem, if `-y`
+        res = _modem(args, doSend=True, _useYModem=args.ymodem)
 
     elif args.command in ["xr", "xmodem r"]:
-        # Send file (or files) via XModem
-        res = _xmodem(args, doSend=False)
+        # Send file (or files) via XModem or YModem, if `-y`
+        res = _modem(args, doSend=False, _useYModem=args.ymodem)
 
     elif args.command in ["c", "check"]:    
         # Return version information
