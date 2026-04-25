@@ -80,7 +80,6 @@ options:
 ```
 
 ## Issues
-- Restoring the options and/of libraries using `options disk load` and `library disk load`, respectively, fail with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
 - Restoring libraries using `library disk load` fails with the newer firmware versions. Did not pinpoint from when on this issue exists. For example, with `PicoMiteRP2350V6.03.00B1`, the picomite gets stuck in a boot loop (flash-nuke does not help, but writing an older firmware, e.g. `PicoMiteRP2350V6.02.01.uf2` breaks the loop ...)
 
 ## Trouble shooting
